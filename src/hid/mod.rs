@@ -95,11 +95,20 @@ pub struct Hid {
     thandle: Option<JoinHandle<()>>
 }
 
-fn msg_hid<T>(fd: i32, hdr: &IoMsg, cmd: &T) -> Result<i64, i32> {
+/// Send a command to the io-hid server.
+/// The command comprises a _IO_MSG header and a command structure.
+fn send_cmd<T>(fd: i32, cmd_id: u16, cmd: &T) -> Result<i64, i32> {
+    let hdr = IoMsg {
+        msg_type: _IO_MSG,
+        subtype: cmd_id,
+        mgrid: _IOMGR_HID,
+        combine_len: size_of::<IoMsg>() as u16 + size_of::<PollCmd>() as u16
+    };
+
     let result = unsafe {
         let iovs = vec![
             libc::iovec {
-                iov_base: addr_of!(*hdr) as *mut libc::c_void,
+                iov_base: addr_of!(hdr) as *mut libc::c_void,
                 iov_len: size_of::<IoMsg>()
             },
             libc::iovec {
@@ -135,13 +144,6 @@ fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
 /// Thread used to poll io-hid for events.
 fn poll_thread(fd: i32) {
     // Construct a poll command.
-    let hdr = IoMsg {
-        msg_type: _IO_MSG,
-        subtype: HIDDI_CMD_POLL,
-        mgrid: _IOMGR_HID,
-        combine_len: size_of::<IoMsg>() as u16 + size_of::<PollCmd>() as u16
-    };
-
     let cmd = PollCmd {
         devno: 0,
         param: 0,
@@ -153,7 +155,7 @@ fn poll_thread(fd: i32) {
     };
 
     loop {
-        if let Err(err) = msg_hid(fd, &hdr, &cmd) {
+        if let Err(err) = send_cmd(fd, HIDDI_CMD_POLL, &cmd) {
             println!("Poll thread stopping: {err}");
             break;
         }
@@ -166,13 +168,6 @@ impl Hid {
         let fd = open(c"/dev/io-hid/io-hid", libc::O_RDWR)?;
 
         // Send the connect message.
-        let hdr = IoMsg {
-            msg_type: _IO_MSG,
-            subtype: HIDDI_CMD_CONNECT,
-            mgrid: _IOMGR_HID,
-            combine_len: size_of::<IoMsg>() as u16 + size_of::<ConnectCmd>() as u16
-        };
-
         let cmd = ConnectCmd {
             devno: 0,
             param: 0,
@@ -184,7 +179,7 @@ impl Hid {
             data: std::ptr::null()
         };
 
-        msg_hid(fd, &hdr, &cmd)?;
+        send_cmd(fd, HIDDI_CMD_CONNECT, &cmd)?;
 
         // Start the event polling thread.
         let thandle = thread::spawn(move || { poll_thread(fd); });
