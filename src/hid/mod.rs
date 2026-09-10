@@ -20,6 +20,9 @@ const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
 const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
 const HIDDI_FLAGS_ENUMERATE: u32 = 0x4;
 
+const HIDDI_EVT_INSERTION: u16 = 0x101;
+const HIDDI_EVT_REMOVAL: u16 = 0x102;
+
 #[repr(C, packed)]
 #[derive(Debug)]
 struct IoMsg {
@@ -169,17 +172,26 @@ fn poll_thread(fd: i32) {
     };
 
     loop {
+        // Get an event.
         let mut event = MaybeUninit::<HidEvent>::uninit();
-
         if let Err(err) = send_cmd(fd, HIDDI_CMD_POLL, &cmd, Some(&mut event)) {
             println!("Poll thread stopping: {err}");
             break;
         }
 
         let event = unsafe { event.assume_init() };
-        let event_type = event.event_type;
-        println!("Received event {event_type}");
+        match event.event_type {
+            HIDDI_EVT_INSERTION => device_inserted(&event),
+            HIDDI_EVT_REMOVAL => println!("Device removed"),
+            event_type => println!("Received event {event_type}")
+        };
     }
+}
+
+fn device_inserted(event: &HidEvent) {
+    let vendor_id = unsafe { event.event.insertion.device_ident.vendor_id };
+    let product_id = unsafe { event.event.insertion.device_ident.product_id };
+    println!("Device inserted {:x} {:x}", vendor_id, product_id);
 }
 
 impl Hid {
