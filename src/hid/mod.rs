@@ -6,27 +6,27 @@ use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
 
-pub const _IO_MSG: u16 = 0x113;
+const _IO_MSG: u16 = 0x113;
 
-pub const _IOMGR_HID: u16 = 0x13;
+const _IOMGR_HID: u16 = 0x13;
 
-pub const HID_VERSION: u16 = 0x100;
-pub const HIDD_VERSION: u16 = 0x100;
+const HID_VERSION: u16 = 0x100;
+const HIDD_VERSION: u16 = 0x100;
 
-pub const HIDDI_CMD_CONNECT: u16 = 0x101;
-pub const HIDDI_CMD_POLL: u16 = 0x102;
+const HIDDI_CMD_CONNECT: u16 = 0x101;
+const HIDDI_CMD_POLL: u16 = 0x102;
 
-pub const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
-pub const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
-pub const HIDDI_FLAGS_ENUMERATE: u32 = 0x4;
+const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
+const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
+const HIDDI_FLAGS_ENUMERATE: u32 = 0x4;
 
 #[repr(C, packed)]
 #[derive(Debug)]
-pub struct IoMsg {
+struct IoMsg {
     msg_type: u16,
     combine_len: u16,
-    pub mgrid: u16,
-    pub subtype: u16
+    mgrid: u16,
+    subtype: u16
 }
 
 #[repr(C, packed)]
