@@ -4,6 +4,7 @@ use libc;
 use std::ptr::*;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
+use std::mem::MaybeUninit;
 
 pub const _IO_MSG: u16 = 0x113;
 
@@ -95,9 +96,11 @@ pub struct Hid {
     thandle: Option<JoinHandle<()>>
 }
 
+const NO_REPLY: Option<&mut i32> = None;
+
 /// Send a command to the io-hid server.
 /// The command comprises a _IO_MSG header and a command structure.
-fn send_cmd<T>(fd: i32, cmd_id: u16, cmd: &T) -> Result<i64, i32> {
+fn send_cmd<T, U>(fd: i32, cmd_id: u16, cmd: &T, reply: Option<&mut U>) -> Result<i64, i32> {
     let hdr = IoMsg {
         msg_type: _IO_MSG,
         subtype: cmd_id,
@@ -106,7 +109,8 @@ fn send_cmd<T>(fd: i32, cmd_id: u16, cmd: &T) -> Result<i64, i32> {
     };
 
     let result = unsafe {
-        let iovs = vec![
+        // Construct two-part message.
+        let siovs = vec![
             libc::iovec {
                 iov_base: addr_of!(hdr) as *mut libc::c_void,
                 iov_len: size_of::<IoMsg>()
@@ -117,8 +121,18 @@ fn send_cmd<T>(fd: i32, cmd_id: u16, cmd: &T) -> Result<i64, i32> {
             }
         ];
 
-        libc::MsgSendv_r(fd, addr_of!(iovs[0..1]) as *const libc::iovec, 2,
-                         std::ptr::null(), 0)
+        // Construct one-part reply buffer.
+        let (reply_addr, reply_len) = match reply {
+            Some(u) => (addr_of!(*u) as *mut libc::c_void,
+                        size_of::<U>()),
+            None => (std::ptr::null_mut(), 0)
+        };
+
+        let riov = libc::iovec { iov_base: reply_addr, iov_len: reply_len };
+
+        // Send the message.
+        libc::MsgSendv_r(fd, addr_of!(siovs[0..1]) as *const libc::iovec, 2,
+                         addr_of!(riov) as *const libc::iovec, 1)
     };
 
     if result < 0 {
@@ -155,10 +169,16 @@ fn poll_thread(fd: i32) {
     };
 
     loop {
-        if let Err(err) = send_cmd(fd, HIDDI_CMD_POLL, &cmd) {
+        let mut event = MaybeUninit::<HidEvent>::uninit();
+
+        if let Err(err) = send_cmd(fd, HIDDI_CMD_POLL, &cmd, Some(&mut event)) {
             println!("Poll thread stopping: {err}");
             break;
         }
+
+        let event = unsafe { event.assume_init() };
+        let event_type = event.event_type;
+        println!("Received event {event_type}");
     }
 }
 
@@ -179,7 +199,7 @@ impl Hid {
             data: std::ptr::null()
         };
 
-        send_cmd(fd, HIDDI_CMD_CONNECT, &cmd)?;
+        send_cmd(fd, HIDDI_CMD_CONNECT, &cmd, NO_REPLY)?;
 
         // Start the event polling thread.
         let thandle = thread::spawn(move || { poll_thread(fd); });
