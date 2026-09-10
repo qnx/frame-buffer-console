@@ -3,6 +3,7 @@
 use libc;
 use std::ptr::*;
 use std::ffi::CStr;
+use std::thread::{self, JoinHandle};
 
 pub const _IO_MSG: u16 = 0x113;
 
@@ -10,7 +11,9 @@ pub const _IOMGR_HID: u16 = 0x13;
 
 pub const HID_VERSION: u16 = 0x100;
 pub const HIDD_VERSION: u16 = 0x100;
+
 pub const HIDDI_CMD_CONNECT: u16 = 0x101;
+pub const HIDDI_CMD_POLL: u16 = 0x102;
 
 pub const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
 pub const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
@@ -37,12 +40,62 @@ struct ConnectCmd {
     data: *const u8
 }
 
-/// A connection to the io-hid server.
-pub struct Hid {
-    fd: i32
+#[repr(C, packed)]
+struct PollCmd {
+    devno: u32,
+    param: u32,
+    buffer: u32,
+    pad: u32,
+    dlen: u16,
+    reserved: [u8; 6],
+    data: *const u8
 }
 
-fn msg_hid(fd: i32, hdr: &IoMsg, cmd: &ConnectCmd) -> Result<i64, i32> {
+#[repr(C, packed)]
+#[derive(Copy, Clone)]
+struct HidDeviceIdent {
+    vendor_id: u32,
+    product_id: u32,
+    version: u32
+}
+
+#[repr(C, packed)]
+#[derive(Copy, Clone)]
+struct HidDeviceInstance {
+    _next: *const libc::c_void,
+    _prev: *const libc::c_void,
+    devno: u32,
+    device_ident: HidDeviceIdent,
+    _report_info: *const libc::c_void,
+    report_desc_len: u16,
+    reserved: [u8; 6]
+}
+
+#[repr(C, packed)]
+union HidEventPerType {
+    insertion: HidDeviceInstance,
+    removal: HidDeviceInstance,
+}
+
+#[repr(C, packed)]
+struct HidEvent {
+    event_type: u16,
+    pad1: u32,
+    length: u16,
+    event: HidEventPerType,
+    reserved: [u8; 2],
+    dlen: u16,
+    pad2: u32,
+    data: *const u8
+}
+
+/// A connection to the io-hid server.
+pub struct Hid {
+    fd: i32,
+    thandle: Option<JoinHandle<()>>
+}
+
+fn msg_hid<T>(fd: i32, hdr: &IoMsg, cmd: &T) -> Result<i64, i32> {
     let result = unsafe {
         let iovs = vec![
             libc::iovec {
@@ -51,7 +104,7 @@ fn msg_hid(fd: i32, hdr: &IoMsg, cmd: &ConnectCmd) -> Result<i64, i32> {
             },
             libc::iovec {
                 iov_base: addr_of!(*cmd) as *mut libc::c_void,
-                iov_len: size_of::<ConnectCmd>()
+                iov_len: size_of::<T>()
             }
         ];
 
@@ -66,6 +119,7 @@ fn msg_hid(fd: i32, hdr: &IoMsg, cmd: &ConnectCmd) -> Result<i64, i32> {
     Ok(result)
 }
 
+/// Safe wrapper for libc::open()
 fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
     let fd = unsafe {
         libc::open(path.as_ptr(), mode)
@@ -76,6 +130,34 @@ fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
     }
 
     Ok(fd)
+}
+
+/// Thread used to poll io-hid for events.
+fn poll_thread(fd: i32) {
+    // Construct a poll command.
+    let hdr = IoMsg {
+        msg_type: _IO_MSG,
+        subtype: HIDDI_CMD_POLL,
+        mgrid: _IOMGR_HID,
+        combine_len: size_of::<IoMsg>() as u16 + size_of::<PollCmd>() as u16
+    };
+
+    let cmd = PollCmd {
+        devno: 0,
+        param: 0,
+        buffer: size_of::<HidEvent>() as u32,
+        pad: 0,
+        dlen: 0,
+        reserved: [0, 0, 0, 0, 0, 0],
+        data: std::ptr::null()
+    };
+
+    loop {
+        if let Err(err) = msg_hid(fd, &hdr, &cmd) {
+            println!("Poll thread stopping: {err}");
+            break;
+        }
+    }
 }
 
 impl Hid {
@@ -104,6 +186,22 @@ impl Hid {
 
         msg_hid(fd, &hdr, &cmd)?;
 
-        Ok(Hid { fd })
+        // Start the event polling thread.
+        let thandle = thread::spawn(move || { poll_thread(fd); });
+
+        Ok(Hid { fd, thandle: Some(thandle) })
+    }
+}
+
+impl Drop for Hid {
+    fn drop(&mut self) {
+        // Close the connection to the server.
+        // This should cause the polling thread to exit.
+        unsafe { libc::close(self.fd) };
+
+        // Wait for the polling thread to exit.
+        if let Some(thandle) = self.thandle.take() {
+            thandle.join().unwrap();
+        }
     }
 }
