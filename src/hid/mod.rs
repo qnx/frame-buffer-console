@@ -50,6 +50,8 @@ union HidEventPerType {
     removal: HidDeviceInstance,
 }
 
+const MAX_REPORT_LEN: usize = 200;
+
 #[repr(C, packed)]
 struct HidEvent {
     event_type: u16,
@@ -58,14 +60,8 @@ struct HidEvent {
     event: HidEventPerType,
     reserved: [u8; 2],
     dlen: u16,
-    pad2: u32,
-    data: [u8; 8]
-}
-
-#[repr(C, packed)]
-struct HidReportEvent {
-    event: HidEvent,
-    report: report::Report
+    pad2: [u8; 12],
+    report: [u8; MAX_REPORT_LEN]
 }
 
 /// A connection to the io-hid server.
@@ -98,7 +94,7 @@ fn poll_thread(fd: i32) {
     let cmd = cmd::PollCmd {
         devno: 0,
         param: 0,
-        buffer: size_of::<HidReportEvent>() as u32,
+        buffer: size_of::<HidEvent>() as u32,
         _pad1: 0,
         _pad2: [0, 0]
     };
@@ -107,17 +103,17 @@ fn poll_thread(fd: i32) {
 
     loop {
         // Get an event.
-        let mut event = MaybeUninit::<HidReportEvent>::uninit();
+        let mut event = MaybeUninit::<HidEvent>::uninit();
         if let Err(err) = cmd::send(fd, cmd::POLL, &cmd, Some(&mut event)) {
             println!("Poll thread stopping: {err}");
             break;
         }
 
         let event = unsafe { event.assume_init() };
-        let (etype, elen) = (event.event.event_type, event.event.length);
+        let (etype, elen) = (event.event_type, event.length);
         println!("{etype} {elen}");
-        match event.event.event_type {
-            HIDDI_EVT_INSERTION => device_inserted(&event.event, fd, &mut device),
+        match event.event_type {
+            HIDDI_EVT_INSERTION => device_inserted(&event, fd, &mut device),
             HIDDI_EVT_HID_REPORT => report_received(&event, &device),
             HIDDI_EVT_REMOVAL => println!("Device removed"),
             event_type => println!("Received event {event_type}")
@@ -133,7 +129,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
     // Extract the insertion event.
     let dev_inst = unsafe { event.event.insertion };
     let report_len = dev_inst.report_desc_len as usize;
-    if report_len > size_of::<report::Report>() {
+    if report_len > MAX_REPORT_LEN {
         println!("Cannot handle device with report length {report_len}");
         return;
     }
@@ -147,15 +143,15 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
         _pad: [0, 0, 0]
     };
 
-    let mut report_event = MaybeUninit::<HidReportEvent>::uninit();
-    if let Err(err) = cmd::send(fd, cmd::REPORT_DESC, &cmd, Some(&mut report_event)) {
+    let mut event = MaybeUninit::<HidEvent>::uninit();
+    if let Err(err) = cmd::send(fd, cmd::REPORT_DESC, &cmd, Some(&mut event)) {
         println!("Failed to get report: {err}");
         return;
     }
 
     // Parse the report.
-    let report_event = unsafe { report_event.assume_init() };
-    if let Err(_) = report::parse(&report_event.report, dev_inst.report_desc_len as usize,
+    let event = unsafe { event.assume_init() };
+    if let Err(_) = report::parse(&event.report, event.length as usize,
                                   &mut new_device) {
         println!("Failed to parse report");
         return;
@@ -186,7 +182,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
     *device = Some(new_device);
 }
 
-fn report_received(report_event: &HidReportEvent, device: &Option<Device>) {
+fn report_received(_event: &HidEvent, device: &Option<Device>) {
     let device = match device {
         None => {
             println!("Report without a device");

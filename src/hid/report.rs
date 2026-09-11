@@ -3,7 +3,6 @@
 use crate::hid::device::*;
 
 pub struct Report {
-    pub data: [u8; 256]
 }
 
 #[derive(Debug)]
@@ -67,11 +66,11 @@ enum CollectionType {
     Reserved
 }
 
-pub fn parse(report: &Report, len: usize, device: &mut Device) -> Result<(), ()> {
+pub fn parse(report: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
     let mut pos = 0usize;
     loop {
         // Parse the first byte of the item.
-        let item = report.data[pos];
+        let item = report[pos];
         let item_size = match item & 0x3 {
             0 => 0,
             1 => 1,
@@ -93,7 +92,7 @@ pub fn parse(report: &Report, len: usize, device: &mut Device) -> Result<(), ()>
         }
 
         // Parse individual item.
-        let item = &report.data[pos..next_pos];
+        let item = &report[pos..next_pos];
         println!("{:?}", item_type);
         match item_type {
             ItemType::Main => parse_main_item(item, next_pos - pos, device)?,
@@ -156,7 +155,6 @@ fn parse_input(_item: &[u8], len: usize) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
-
 
     Ok(())
 }
