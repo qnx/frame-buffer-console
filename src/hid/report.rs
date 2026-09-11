@@ -40,6 +40,21 @@ enum GlobalItemType {
     Reserved
 }
 
+#[derive(Debug)]
+enum LocalItemType {
+    Usage,
+    UsageMinimum,
+    UsageMaximum,
+    DesignatorIndex,
+    DesignatorMinimum,
+    DesignatorMaximum,
+    StringIndex,
+    StringMinimum,
+    StringMaximum,
+    Delimiter,
+    Reserved
+}
+
 pub fn parse(report: &Report, len: usize) -> Result<(), ()> {
     let mut pos = 0usize;
     loop {
@@ -86,6 +101,7 @@ pub fn parse(report: &Report, len: usize) -> Result<(), ()> {
         match item_type {
             ItemType::Main => parse_main_item(&report.data[pos..next_pos], next_pos - pos)?,
             ItemType::Global => parse_global_item(&report.data[pos..next_pos], next_pos - pos)?,
+            ItemType::Local => parse_local_item(&report.data[pos..next_pos], next_pos - pos)?,
             _ => {}
         }
 
@@ -158,7 +174,48 @@ fn parse_global_item(item: &[u8], len: usize) -> Result<(), ()> {
 
     println!("{:?}", item_type);
     match item_type {
-        GlobalItemType::UsagePage => parse_usage(item, len)?,
+        GlobalItemType::UsagePage => parse_usage_page(item, len)?,
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn parse_usage_page(item: &[u8], len: usize) -> Result<(), ()> {
+    if len == 1 {
+        return Err(());
+    }
+
+    match item[1] {
+        0x01 => println!("Generic Desktop"),
+        0x07 => println!("Keyboard"),
+        0x08 => println!("LED"),
+        0x09 => println!("Button"),
+        _ => println!("Other {:x}", item[1])
+    }
+
+    Ok(())
+}
+
+fn parse_local_item(item: &[u8], len: usize) -> Result<(), ()> {
+    let tag = item[0];
+    let item_type = match tag & 0xf0 {
+        0x00 => LocalItemType::Usage,
+        0x10 => LocalItemType::UsageMinimum,
+        0x20 => LocalItemType::UsageMaximum,
+        0x30 => LocalItemType::DesignatorIndex,
+        0x40 => LocalItemType::DesignatorMinimum,
+        0x50 => LocalItemType::DesignatorMaximum,
+        0x70 => LocalItemType::StringIndex,
+        0x80 => LocalItemType::StringMinimum,
+        0x90 => LocalItemType::StringMaximum,
+        0xa0 => LocalItemType::Delimiter,
+        _ => LocalItemType::Reserved
+    };
+
+    println!("{:?}", item_type);
+    match item_type {
+        LocalItemType::Usage => parse_usage(item, len)?,
         _ => {}
     }
 
@@ -171,10 +228,9 @@ fn parse_usage(item: &[u8], len: usize) -> Result<(), ()> {
     }
 
     match item[1] {
-        0x01 => println!("Generic Desktop"),
-        0x07 => println!("Keyboard"),
-        0x08 => println!("LED"),
-        0x09 => println!("Button"),
+        0x01 => println!("Pointer"),
+        0x02 => println!("Mouse"),
+        0x06 => println!("Keyboard"),
         _ => println!("Other {:x}", item[1])
     }
 
