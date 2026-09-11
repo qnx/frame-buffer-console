@@ -6,6 +6,8 @@ use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
 
+mod report;
+
 const _IO_MSG: u16 = 0x113;
 
 const _IOMGR_HID: u16 = 0x13;
@@ -15,6 +17,7 @@ const HIDD_VERSION: u16 = 0x100;
 
 const HIDDI_CMD_CONNECT: u16 = 0x101;
 const HIDDI_CMD_POLL: u16 = 0x102;
+const HIDDI_CMD_REPORT_DESC: u16 = 0x114;
 
 const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
 const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
@@ -39,9 +42,7 @@ struct ConnectCmd {
     flags: u32,
     vhid: u16,
     vhidd: u16,
-    dlen: u16,
-    reserved: [u8; 6],
-    data: *const u8
+    _pad: [u64; 2]
 }
 
 #[repr(C, packed)]
@@ -49,14 +50,19 @@ struct PollCmd {
     devno: u32,
     param: u32,
     buffer: u32,
-    pad: u32,
-    dlen: u16,
-    reserved: [u8; 6],
-    data: *const u8
+    _pad1: u32,
+    _pad2: [u64; 2]
 }
 
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+struct ReportCmd {
+    devno: u32,
+    param: u32,
+    _pad: [u64; 3]
+}
+
+#[repr(C, packed)]
+#[derive(Copy, Clone, Debug)]
 struct HidDeviceIdent {
     vendor_id: u32,
     product_id: u32,
@@ -64,7 +70,7 @@ struct HidDeviceIdent {
 }
 
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct HidDeviceInstance {
     _next: *const libc::c_void,
     _prev: *const libc::c_void,
@@ -91,6 +97,12 @@ struct HidEvent {
     dlen: u16,
     pad2: u32,
     data: *const u8
+}
+
+#[repr(C, packed)]
+struct HidReportEvent {
+    event: HidEvent,
+    report: report::Report
 }
 
 /// A connection to the io-hid server.
@@ -132,6 +144,7 @@ fn send_cmd<T, U>(fd: i32, cmd_id: u16, cmd: &T, reply: Option<&mut U>) -> Resul
         };
 
         let riov = libc::iovec { iov_base: reply_addr, iov_len: reply_len };
+        println!("{:?} {}", riov.iov_base, riov.iov_len);
 
         // Send the message.
         libc::MsgSendv_r(fd, addr_of!(siovs[0..1]) as *const libc::iovec, 2,
@@ -165,10 +178,8 @@ fn poll_thread(fd: i32) {
         devno: 0,
         param: 0,
         buffer: size_of::<HidEvent>() as u32,
-        pad: 0,
-        dlen: 0,
-        reserved: [0, 0, 0, 0, 0, 0],
-        data: std::ptr::null()
+        _pad1: 0,
+        _pad2: [0, 0]
     };
 
     loop {
@@ -181,17 +192,33 @@ fn poll_thread(fd: i32) {
 
         let event = unsafe { event.assume_init() };
         match event.event_type {
-            HIDDI_EVT_INSERTION => device_inserted(&event),
+            HIDDI_EVT_INSERTION => device_inserted(&event, fd),
             HIDDI_EVT_REMOVAL => println!("Device removed"),
             event_type => println!("Received event {event_type}")
         };
     }
 }
 
-fn device_inserted(event: &HidEvent) {
-    let vendor_id = unsafe { event.event.insertion.device_ident.vendor_id };
-    let product_id = unsafe { event.event.insertion.device_ident.product_id };
-    println!("Device inserted {:x} {:x}", vendor_id, product_id);
+fn device_inserted(event: &HidEvent, fd: i32) {
+    // Extract the insertion event.
+    let dev_inst = unsafe { event.event.insertion };
+    println!("Device inserted {:?}", dev_inst);
+
+    // Send a report command.
+    let cmd = ReportCmd {
+        devno: dev_inst.devno,
+        param: dev_inst.report_desc_len as u32,
+        _pad: [0, 0, 0]
+    };
+
+    let mut report_event = MaybeUninit::<HidReportEvent>::uninit();
+    if let Err(err) = send_cmd(fd, HIDDI_CMD_REPORT_DESC, &cmd, Some(&mut report_event)) {
+        println!("Failed to get report: {err}");
+        return;
+    }
+
+    let report_event = unsafe { report_event.assume_init() };
+    report::parse(&report_event.report, dev_inst.report_desc_len as usize);
 }
 
 impl Hid {
@@ -206,9 +233,7 @@ impl Hid {
             flags: HIDDI_FLAGS_EVTPOLL | HIDDI_FLAGS_EXCL_ATTACH | HIDDI_FLAGS_ENUMERATE,
             vhid: HID_VERSION,
             vhidd: HIDD_VERSION,
-            dlen: 0,
-            reserved: [0, 0, 0, 0, 0, 0],
-            data: std::ptr::null()
+            _pad: [0, 0]
         };
 
         send_cmd(fd, HIDDI_CMD_CONNECT, &cmd, NO_REPLY)?;
