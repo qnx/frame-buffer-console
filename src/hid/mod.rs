@@ -224,7 +224,10 @@ fn device_inserted(event: &HidEvent, fd: i32) {
     }
 
     let report_event = unsafe { report_event.assume_init() };
-    report::parse(&report_event.report, dev_inst.report_desc_len as usize);
+    if let Err(_) = report::parse(&report_event.report, dev_inst.report_desc_len as usize) {
+        println!("Failed to parse report");
+        return;
+    }
 }
 
 impl Hid {
