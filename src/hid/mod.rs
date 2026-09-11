@@ -1,12 +1,13 @@
 /// Module for communicating with io-hid
 
+mod report;
+mod device;
+
 use libc;
 use std::ptr::*;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
-
-mod report;
 
 const _IO_MSG: u16 = 0x113;
 
@@ -144,7 +145,6 @@ fn send_cmd<T, U>(fd: i32, cmd_id: u16, cmd: &T, reply: Option<&mut U>) -> Resul
         };
 
         let riov = libc::iovec { iov_base: reply_addr, iov_len: reply_len };
-        println!("{:?} {}", riov.iov_base, riov.iov_len);
 
         // Send the message.
         libc::MsgSendv_r(fd, addr_of!(siovs[0..1]) as *const libc::iovec, 2,
@@ -208,7 +208,7 @@ fn device_inserted(event: &HidEvent, fd: i32) {
         return;
     }
 
-    println!("Device inserted {:?}", dev_inst);
+    let mut device = device::Device::new(dev_inst.devno);
 
     // Send a report command.
     let cmd = ReportCmd {
@@ -224,9 +224,14 @@ fn device_inserted(event: &HidEvent, fd: i32) {
     }
 
     let report_event = unsafe { report_event.assume_init() };
-    if let Err(_) = report::parse(&report_event.report, dev_inst.report_desc_len as usize) {
+    if let Err(_) = report::parse(&report_event.report, dev_inst.report_desc_len as usize,
+                                  &mut device) {
         println!("Failed to parse report");
         return;
+    }
+
+    if device.is_keyboard() {
+        println!("Found keyboard {}", device.device_number);
     }
 }
 

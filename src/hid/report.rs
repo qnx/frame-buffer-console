@@ -1,5 +1,7 @@
 /// Handle report descriptors
 
+use crate::hid::device::*;
+
 pub struct Report {
     pub data: [u8; 256]
 }
@@ -8,9 +10,7 @@ pub struct Report {
 enum ItemType {
     Main,
     Global,
-    Local,
-    Reserved,
-    Long
+    Local
 }
 
 #[derive(Debug)]
@@ -55,59 +55,42 @@ enum LocalItemType {
     Reserved
 }
 
-pub fn parse(report: &Report, len: usize) -> Result<(), ()> {
+pub fn parse(report: &Report, len: usize, device: &mut Device) -> Result<(), ()> {
     let mut pos = 0usize;
     loop {
         // Parse the first byte of the item.
         let item = report.data[pos];
-        let item_size;
-        let item_type;
+        let item_size = match item & 0x3 {
+            0 => 0,
+            1 => 1,
+            2 => 2,
+            _ => 4
+        };
 
-        if item == 0xe {
-            // Long item.
-            // Size is on next byte.
-            if pos + 1 == len {
-                println!("Bad report");
-                break;
-            }
-
-            item_size = report.data[pos + 1] as usize;
-            item_type = ItemType::Long;
-        } else {
-            // Short item.
-            // Size and type are in the first byte.
-            item_size = match item & 0x3 {
-                0 => 0,
-                1 => 1,
-                2 => 2,
-                _ => 4
-            };
-
-            item_type = match item & 0xc {
-                0 => ItemType::Main,
-                4 => ItemType::Global,
-                8 => ItemType::Local,
-                _ => ItemType::Reserved
-            };
-        }
+        let item_type = match item & 0xc {
+            0 => ItemType::Main,
+            4 => ItemType::Global,
+            8 => ItemType::Local,
+            _ => { return Err(()) } // Reserved/long item
+        };
 
         // Ensure that the item fits in the report's data.
         let next_pos = pos + 1 + item_size;
         if next_pos > len {
-            println!("Bad report");
             return Err(());
         }
 
+        // Parse individual item.
+        let item = &report.data[pos..next_pos];
         match item_type {
-            ItemType::Main => parse_main_item(&report.data[pos..next_pos], next_pos - pos)?,
-            ItemType::Global => parse_global_item(&report.data[pos..next_pos], next_pos - pos)?,
-            ItemType::Local => parse_local_item(&report.data[pos..next_pos], next_pos - pos)?,
-            _ => {}
+            ItemType::Main => parse_main_item(item, next_pos - pos, device)?,
+            ItemType::Global => parse_global_item(item, next_pos - pos, device)?,
+            ItemType::Local => parse_local_item(item, next_pos - pos, device)?,
         }
 
+        // Move to the next item.
         pos = next_pos;
         if pos == len {
-            println!("Finished report");
             break;
         }
     }
@@ -115,7 +98,7 @@ pub fn parse(report: &Report, len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_main_item(item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_main_item(item: &[u8], len: usize, _device: &mut Device) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xfc {
         0x80 => MainItemType::Input,
@@ -126,7 +109,6 @@ fn parse_main_item(item: &[u8], len: usize) -> Result<(), ()> {
         _ => MainItemType::Reserved
     };
 
-    println!("{:?}", item_type);
     match item_type {
         MainItemType::Collection => parse_collection(item, len)?,
         _ => {}
@@ -135,26 +117,15 @@ fn parse_main_item(item: &[u8], len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_collection(item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_collection(_item: &[u8], len: usize) -> Result<(), ()> {
     if len == 1 {
         return Err(());
-    }
-
-    match item[1] {
-        0x00 => println!("Physical"),
-        0x01 => println!("Application"),
-        0x02 => println!("Logical"),
-        0x03 => println!("Report"),
-        0x04 => println!("Named array"),
-        0x05 => println!("Usage switch"),
-        0x06 => println!("Usage modifier"),
-        _ => println!("Reserved")
     }
 
     Ok(())
 }
 
-fn parse_global_item(item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_global_item(item: &[u8], len: usize, _device: &mut Device) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xf0 {
         0x00 => GlobalItemType::UsagePage,
@@ -172,7 +143,6 @@ fn parse_global_item(item: &[u8], len: usize) -> Result<(), ()> {
         _ => GlobalItemType::Reserved
     };
 
-    println!("{:?}", item_type);
     match item_type {
         GlobalItemType::UsagePage => parse_usage_page(item, len)?,
         _ => {}
@@ -181,23 +151,15 @@ fn parse_global_item(item: &[u8], len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_usage_page(item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_usage_page(_item: &[u8], len: usize) -> Result<(), ()> {
     if len == 1 {
         return Err(());
-    }
-
-    match item[1] {
-        0x01 => println!("Generic Desktop"),
-        0x07 => println!("Keyboard"),
-        0x08 => println!("LED"),
-        0x09 => println!("Button"),
-        _ => println!("Other {:x}", item[1])
     }
 
     Ok(())
 }
 
-fn parse_local_item(item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_local_item(item: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xf0 {
         0x00 => LocalItemType::Usage,
@@ -213,25 +175,24 @@ fn parse_local_item(item: &[u8], len: usize) -> Result<(), ()> {
         _ => LocalItemType::Reserved
     };
 
-    println!("{:?}", item_type);
     match item_type {
-        LocalItemType::Usage => parse_usage(item, len)?,
+        LocalItemType::Usage => parse_usage(item, len, device)?,
         _ => {}
     }
 
     Ok(())
 }
 
-fn parse_usage(item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_usage(item: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
 
     match item[1] {
-        0x01 => println!("Pointer"),
-        0x02 => println!("Mouse"),
-        0x06 => println!("Keyboard"),
-        _ => println!("Other {:x}", item[1])
+        0x01 => device.set_type(DeviceType::Mouse),
+        0x02 => device.set_type(DeviceType::Mouse),
+        0x06 => device.set_type(DeviceType::Keyboard),
+        _ => {}
     }
 
     Ok(())

@@ -6,6 +6,6 @@ use hid::Hid;
 
 fn main() {
     let hid = Hid::new().unwrap();
-    thread::sleep(Duration::from_secs(1));
+    thread::sleep(Duration::from_secs(600));
     drop(hid);
 }
