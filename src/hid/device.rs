@@ -1,17 +1,17 @@
 /// Human interface device.
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum DeviceType {
     Keyboard,
     Mouse,
     Other
 }
 
+#[derive(Debug)]
 pub struct Device {
     pub device_number: u32,
     device_type: DeviceType,
     pub input_id: u8,
-    pub output_id: u8
 }
 
 impl Device {
@@ -19,8 +19,7 @@ impl Device {
         Device {
             device_number,
             device_type: DeviceType::Other,
-            input_id: 0,
-            output_id: 0
+            input_id: 0
         }
     }
 
