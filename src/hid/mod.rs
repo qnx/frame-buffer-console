@@ -18,6 +18,7 @@ const HIDD_VERSION: u16 = 0x100;
 
 const HIDDI_CMD_CONNECT: u16 = 0x101;
 const HIDDI_CMD_POLL: u16 = 0x102;
+const HIDDI_CMD_REPORT_ATTACH: u16 = 0x103;
 const HIDDI_CMD_REPORT_DESC: u16 = 0x114;
 
 const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
@@ -26,6 +27,9 @@ const HIDDI_FLAGS_ENUMERATE: u32 = 0x4;
 
 const HIDDI_EVT_INSERTION: u16 = 0x101;
 const HIDDI_EVT_REMOVAL: u16 = 0x102;
+
+const HID_REPORT_INPUT: u16 = 0x8;
+const HID_REPORT_OUTPUT: u16 = 0x8;
 
 #[repr(C, packed)]
 #[derive(Debug)]
@@ -63,6 +67,17 @@ struct ReportCmd {
 }
 
 #[repr(C, packed)]
+struct AttachCmd {
+    devno: u32,
+    param: u32,
+    flags: u32,
+    report_type: u16,
+    report_id: u8,
+    _pad1: u8,
+    _pad2: [u64; 2]
+}
+
+#[repr(C, packed)]
 #[derive(Copy, Clone, Debug)]
 struct HidDeviceIdent {
     vendor_id: u32,
@@ -91,13 +106,13 @@ union HidEventPerType {
 #[repr(C, packed)]
 struct HidEvent {
     event_type: u16,
-    pad1: u32,
     length: u16,
+    pad1: u32,
     event: HidEventPerType,
     reserved: [u8; 2],
     dlen: u16,
     pad2: u32,
-    data: *const u8
+    data: [u8; 8]
 }
 
 #[repr(C, packed)]
@@ -174,25 +189,29 @@ fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
 /// Thread used to poll io-hid for events.
 fn poll_thread(fd: i32) {
     // Construct a poll command.
+    // Once a device is attached, the poll command message can return a report, so the reply needs
+    // to include a Report structure.
     let cmd = PollCmd {
         devno: 0,
         param: 0,
-        buffer: size_of::<HidEvent>() as u32,
+        buffer: size_of::<HidReportEvent>() as u32,
         _pad1: 0,
         _pad2: [0, 0]
     };
 
     loop {
         // Get an event.
-        let mut event = MaybeUninit::<HidEvent>::uninit();
+        let mut event = MaybeUninit::<HidReportEvent>::uninit();
         if let Err(err) = send_cmd(fd, HIDDI_CMD_POLL, &cmd, Some(&mut event)) {
             println!("Poll thread stopping: {err}");
             break;
         }
 
         let event = unsafe { event.assume_init() };
-        match event.event_type {
-            HIDDI_EVT_INSERTION => device_inserted(&event, fd),
+        let (etype, elen) = (event.event.event_type, event.event.length);
+        println!("{etype} {elen}");
+        match event.event.event_type {
+            HIDDI_EVT_INSERTION => device_inserted(&event.event, fd),
             HIDDI_EVT_REMOVAL => println!("Device removed"),
             event_type => println!("Received event {event_type}")
         };
@@ -212,7 +231,7 @@ fn device_inserted(event: &HidEvent, fd: i32) {
 
     // Send a report command.
     let cmd = ReportCmd {
-        devno: dev_inst.devno,
+        devno: device.device_number,
         param: report_len as u32,
         _pad: [0, 0, 0]
     };
@@ -223,6 +242,7 @@ fn device_inserted(event: &HidEvent, fd: i32) {
         return;
     }
 
+    // Parse the report.
     let report_event = unsafe { report_event.assume_init() };
     if let Err(_) = report::parse(&report_event.report, dev_inst.report_desc_len as usize,
                                   &mut device) {
@@ -230,8 +250,26 @@ fn device_inserted(event: &HidEvent, fd: i32) {
         return;
     }
 
-    if device.is_keyboard() {
-        println!("Found keyboard {}", device.device_number);
+    if !device.is_keyboard() {
+        return;
+    }
+
+    println!("Found keyboard {}", device.device_number);
+
+    // Send an attach command.
+    let cmd = AttachCmd {
+        devno: device.device_number,
+        param: 0,
+        flags: 0,
+        report_type: HID_REPORT_INPUT,
+        report_id: device.input_id,
+        _pad1: 0,
+        _pad2: [ 0, 0 ]
+    };
+
+    if let Err(err) = send_cmd(fd, HIDDI_CMD_REPORT_ATTACH, &cmd, NO_REPLY) {
+        println!("Failed to attach device: {err}");
+        return;
     }
 }
 

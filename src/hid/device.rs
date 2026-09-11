@@ -9,12 +9,19 @@ pub enum DeviceType {
 
 pub struct Device {
     pub device_number: u32,
-    device_type: DeviceType
+    device_type: DeviceType,
+    pub input_id: u8,
+    pub output_id: u8
 }
 
 impl Device {
     pub fn new(device_number: u32) -> Device {
-        Device { device_number, device_type: DeviceType::Other }
+        Device {
+            device_number,
+            device_type: DeviceType::Other,
+            input_id: 0,
+            output_id: 0
+        }
     }
 
     pub fn set_type(&mut self, device_type: DeviceType) {

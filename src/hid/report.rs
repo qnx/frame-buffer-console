@@ -55,6 +55,18 @@ enum LocalItemType {
     Reserved
 }
 
+#[derive(Debug)]
+enum CollectionType {
+    Physical,
+    Application,
+    Logical,
+    Report,
+    NamedArray,
+    UsageSwitch,
+    UsageModifier,
+    Reserved
+}
+
 pub fn parse(report: &Report, len: usize, device: &mut Device) -> Result<(), ()> {
     let mut pos = 0usize;
     loop {
@@ -82,6 +94,7 @@ pub fn parse(report: &Report, len: usize, device: &mut Device) -> Result<(), ()>
 
         // Parse individual item.
         let item = &report.data[pos..next_pos];
+        println!("{:?}", item_type);
         match item_type {
             ItemType::Main => parse_main_item(item, next_pos - pos, device)?,
             ItemType::Global => parse_global_item(item, next_pos - pos, device)?,
@@ -109,18 +122,41 @@ fn parse_main_item(item: &[u8], len: usize, _device: &mut Device) -> Result<(), 
         _ => MainItemType::Reserved
     };
 
+    println!("{:?}", item_type);
     match item_type {
         MainItemType::Collection => parse_collection(item, len)?,
+        MainItemType::Input => parse_input(item, len)?,
         _ => {}
     }
 
     Ok(())
 }
 
-fn parse_collection(_item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_collection(item: &[u8], len: usize) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
+
+    let coll_type = match item[1] {
+        0x00 => CollectionType::Physical,
+        0x01 => CollectionType::Application,
+        0x02 => CollectionType::Logical,
+        0x03 => CollectionType::Report,
+        0x04 => CollectionType::NamedArray,
+        0x05 => CollectionType::UsageSwitch,
+        0x06 => CollectionType::UsageModifier,
+        _ => CollectionType::Reserved
+    };
+
+    println!("{:?}", coll_type);
+    Ok(())
+}
+
+fn parse_input(_item: &[u8], len: usize) -> Result<(), ()> {
+    if len == 1 {
+        return Err(());
+    }
+
 
     Ok(())
 }
@@ -143,8 +179,10 @@ fn parse_global_item(item: &[u8], len: usize, _device: &mut Device) -> Result<()
         _ => GlobalItemType::Reserved
     };
 
+    println!("{:?}", item_type);
     match item_type {
         GlobalItemType::UsagePage => parse_usage_page(item, len)?,
+        GlobalItemType::ReportId => parse_report_id(item, len)?,
         _ => {}
     }
 
@@ -152,6 +190,14 @@ fn parse_global_item(item: &[u8], len: usize, _device: &mut Device) -> Result<()
 }
 
 fn parse_usage_page(_item: &[u8], len: usize) -> Result<(), ()> {
+    if len == 1 {
+        return Err(());
+    }
+
+    Ok(())
+}
+
+fn parse_report_id(_item: &[u8], len: usize) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
@@ -175,6 +221,7 @@ fn parse_local_item(item: &[u8], len: usize, device: &mut Device) -> Result<(), 
         _ => LocalItemType::Reserved
     };
 
+    println!("{:?}", item_type);
     match item_type {
         LocalItemType::Usage => parse_usage(item, len, device)?,
         _ => {}
