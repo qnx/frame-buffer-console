@@ -202,12 +202,18 @@ fn poll_thread(fd: i32) {
 fn device_inserted(event: &HidEvent, fd: i32) {
     // Extract the insertion event.
     let dev_inst = unsafe { event.event.insertion };
+    let report_len = dev_inst.report_desc_len as usize;
+    if report_len > size_of::<report::Report>() {
+        println!("Cannot handle device with report length {report_len}");
+        return;
+    }
+
     println!("Device inserted {:?}", dev_inst);
 
     // Send a report command.
     let cmd = ReportCmd {
         devno: dev_inst.devno,
-        param: dev_inst.report_desc_len as u32,
+        param: report_len as u32,
         _pad: [0, 0, 0]
     };
 
