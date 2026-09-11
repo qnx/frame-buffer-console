@@ -8,7 +8,7 @@ use libc;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
-use device::Device;
+use device::{Device, DeviceType };
 
 const HID_VERSION: u16 = 0x100;
 const HIDD_VERSION: u16 = 0x100;
@@ -134,11 +134,11 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
         return;
     }
 
-    let mut new_device = Device::new(dev_inst.devno);
+    let device_number = dev_inst.devno;
 
     // Send a report command.
     let cmd = cmd::ReportCmd {
-        devno: new_device.device_number,
+        devno: device_number,
         param: report_len as u32,
         _pad: [0, 0, 0]
     };
@@ -151,25 +151,24 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
 
     // Parse the report.
     let event = unsafe { event.assume_init() };
-    if let Err(_) = report::parse(&event.report, event.length as usize,
-                                  &mut new_device) {
-        println!("Failed to parse report");
+    let report = match report::parse(&event.report, event.length as usize) {
+        Ok(report) => report,
+        Err(_) => { println!("Failed to parse report"); return; }
+    };
+
+    if report.device_type != DeviceType::Keyboard {
         return;
     }
 
-    if !new_device.is_keyboard() {
-        return;
-    }
-
-    println!("Found keyboard {}", new_device.device_number);
+    println!("Found keyboard {}", device_number);
 
     // Send an attach command.
     let cmd = cmd::AttachCmd {
-        devno: new_device.device_number,
+        devno: device_number,
         param: 0,
         flags: 0,
         report_type: HID_REPORT_INPUT,
-        report_id: new_device.input_id,
+        report_id: report.input_id,
         _pad1: 0,
         _pad2: [ 0, 0 ]
     };
@@ -179,7 +178,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
         return;
     }
 
-    *device = Some(new_device);
+    *device = Some(Device::new(device_number));
 }
 
 fn report_received(_event: &HidEvent, device: &Option<Device>) {

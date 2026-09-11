@@ -3,6 +3,8 @@
 use crate::hid::device::*;
 
 pub struct Report {
+    pub device_type: DeviceType,
+    pub input_id: u8
 }
 
 #[derive(Debug)]
@@ -66,11 +68,16 @@ enum CollectionType {
     Reserved
 }
 
-pub fn parse(report: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
+pub fn parse(data: &[u8], len: usize) -> Result<Report, ()> {
+    let mut report = Report {
+        device_type: DeviceType::Other,
+        input_id: 0
+    };
+
     let mut pos = 0usize;
     loop {
         // Parse the first byte of the item.
-        let item = report[pos];
+        let item = data[pos];
         let item_size = match item & 0x3 {
             0 => 0,
             1 => 1,
@@ -92,12 +99,12 @@ pub fn parse(report: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
         }
 
         // Parse individual item.
-        let item = &report[pos..next_pos];
+        let item = &data[pos..next_pos];
         println!("{:?}", item_type);
         match item_type {
-            ItemType::Main => parse_main_item(item, next_pos - pos, device)?,
-            ItemType::Global => parse_global_item(item, next_pos - pos, device)?,
-            ItemType::Local => parse_local_item(item, next_pos - pos, device)?,
+            ItemType::Main => parse_main_item(item, next_pos - pos, &mut report)?,
+            ItemType::Global => parse_global_item(item, next_pos - pos, &mut report)?,
+            ItemType::Local => parse_local_item(item, next_pos - pos, &mut report)?,
         }
 
         // Move to the next item.
@@ -107,10 +114,10 @@ pub fn parse(report: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
         }
     }
 
-    Ok(())
+    Ok(report)
 }
 
-fn parse_main_item(item: &[u8], len: usize, _device: &mut Device) -> Result<(), ()> {
+fn parse_main_item(item: &[u8], len: usize, _report: &mut Report) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xfc {
         0x80 => MainItemType::Input,
@@ -159,7 +166,7 @@ fn parse_input(_item: &[u8], len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_global_item(item: &[u8], len: usize, _device: &mut Device) -> Result<(), ()> {
+fn parse_global_item(item: &[u8], len: usize, _report: &mut Report) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xf0 {
         0x00 => GlobalItemType::UsagePage,
@@ -203,7 +210,7 @@ fn parse_report_id(_item: &[u8], len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_local_item(item: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
+fn parse_local_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xf0 {
         0x00 => LocalItemType::Usage,
@@ -221,22 +228,22 @@ fn parse_local_item(item: &[u8], len: usize, device: &mut Device) -> Result<(), 
 
     println!("{:?}", item_type);
     match item_type {
-        LocalItemType::Usage => parse_usage(item, len, device)?,
+        LocalItemType::Usage => parse_usage(item, len, report)?,
         _ => {}
     }
 
     Ok(())
 }
 
-fn parse_usage(item: &[u8], len: usize, device: &mut Device) -> Result<(), ()> {
+fn parse_usage(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
 
     match item[1] {
-        0x01 => device.set_type(DeviceType::Mouse),
-        0x02 => device.set_type(DeviceType::Mouse),
-        0x06 => device.set_type(DeviceType::Keyboard),
+        0x01 => report.device_type = DeviceType::Mouse,
+        0x02 => report.device_type = DeviceType::Mouse,
+        0x06 => report.device_type = DeviceType::Keyboard,
         _ => {}
     }
 
