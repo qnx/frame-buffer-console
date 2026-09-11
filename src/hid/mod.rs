@@ -8,6 +8,7 @@ use libc;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
+use device::Device;
 
 const HID_VERSION: u16 = 0x100;
 const HIDD_VERSION: u16 = 0x100;
@@ -16,11 +17,12 @@ const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
 const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
 const HIDDI_FLAGS_ENUMERATE: u32 = 0x4;
 
-const HIDDI_EVT_INSERTION: u16 = 0x101;
-const HIDDI_EVT_REMOVAL: u16 = 0x102;
+const HIDDI_EVT_INSERTION: u16 = 257;
+const HIDDI_EVT_REMOVAL: u16 = 258;
+const HIDDI_EVT_HID_REPORT: u16 = 260;
 
-const HID_REPORT_INPUT: u16 = 0x8;
-const HID_REPORT_OUTPUT: u16 = 0x8;
+const HID_REPORT_INPUT: u16 = 8;
+const _HID_REPORT_OUTPUT: u16 = 9;
 
 #[repr(C, packed)]
 #[derive(Copy, Clone, Debug)]
@@ -101,6 +103,8 @@ fn poll_thread(fd: i32) {
         _pad2: [0, 0]
     };
 
+    let mut device: Option<Device> = None;
+
     loop {
         // Get an event.
         let mut event = MaybeUninit::<HidReportEvent>::uninit();
@@ -113,14 +117,19 @@ fn poll_thread(fd: i32) {
         let (etype, elen) = (event.event.event_type, event.event.length);
         println!("{etype} {elen}");
         match event.event.event_type {
-            HIDDI_EVT_INSERTION => device_inserted(&event.event, fd),
+            HIDDI_EVT_INSERTION => device_inserted(&event.event, fd, &mut device),
+            HIDDI_EVT_HID_REPORT => report_received(&event, &device),
             HIDDI_EVT_REMOVAL => println!("Device removed"),
             event_type => println!("Received event {event_type}")
         };
     }
 }
 
-fn device_inserted(event: &HidEvent, fd: i32) {
+fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
+    if device.is_some() {
+        return;
+    }
+
     // Extract the insertion event.
     let dev_inst = unsafe { event.event.insertion };
     let report_len = dev_inst.report_desc_len as usize;
@@ -129,11 +138,11 @@ fn device_inserted(event: &HidEvent, fd: i32) {
         return;
     }
 
-    let mut device = device::Device::new(dev_inst.devno);
+    let mut new_device = Device::new(dev_inst.devno);
 
     // Send a report command.
     let cmd = cmd::ReportCmd {
-        devno: device.device_number,
+        devno: new_device.device_number,
         param: report_len as u32,
         _pad: [0, 0, 0]
     };
@@ -147,24 +156,24 @@ fn device_inserted(event: &HidEvent, fd: i32) {
     // Parse the report.
     let report_event = unsafe { report_event.assume_init() };
     if let Err(_) = report::parse(&report_event.report, dev_inst.report_desc_len as usize,
-                                  &mut device) {
+                                  &mut new_device) {
         println!("Failed to parse report");
         return;
     }
 
-    if !device.is_keyboard() {
+    if !new_device.is_keyboard() {
         return;
     }
 
-    println!("Found keyboard {}", device.device_number);
+    println!("Found keyboard {}", new_device.device_number);
 
     // Send an attach command.
     let cmd = cmd::AttachCmd {
-        devno: device.device_number,
+        devno: new_device.device_number,
         param: 0,
         flags: 0,
         report_type: HID_REPORT_INPUT,
-        report_id: device.input_id,
+        report_id: new_device.input_id,
         _pad1: 0,
         _pad2: [ 0, 0 ]
     };
@@ -173,6 +182,20 @@ fn device_inserted(event: &HidEvent, fd: i32) {
         println!("Failed to attach device: {err}");
         return;
     }
+
+    *device = Some(new_device);
+}
+
+fn report_received(report_event: &HidReportEvent, device: &Option<Device>) {
+    let device = match device {
+        None => {
+            println!("Report without a device");
+            return;
+        }
+        Some(device) => device
+    };
+
+    println!("Received report for {:?}", device);
 }
 
 impl Hid {
