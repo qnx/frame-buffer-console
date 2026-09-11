@@ -2,24 +2,15 @@
 
 mod report;
 mod device;
+mod cmd;
 
 use libc;
-use std::ptr::*;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
 
-const _IO_MSG: u16 = 0x113;
-
-const _IOMGR_HID: u16 = 0x13;
-
 const HID_VERSION: u16 = 0x100;
 const HIDD_VERSION: u16 = 0x100;
-
-const HIDDI_CMD_CONNECT: u16 = 0x101;
-const HIDDI_CMD_POLL: u16 = 0x102;
-const HIDDI_CMD_REPORT_ATTACH: u16 = 0x103;
-const HIDDI_CMD_REPORT_DESC: u16 = 0x114;
 
 const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
 const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
@@ -30,52 +21,6 @@ const HIDDI_EVT_REMOVAL: u16 = 0x102;
 
 const HID_REPORT_INPUT: u16 = 0x8;
 const HID_REPORT_OUTPUT: u16 = 0x8;
-
-#[repr(C, packed)]
-#[derive(Debug)]
-struct IoMsg {
-    msg_type: u16,
-    combine_len: u16,
-    mgrid: u16,
-    subtype: u16
-}
-
-#[repr(C, packed)]
-struct ConnectCmd {
-    devno: u32,
-    param: u32,
-    flags: u32,
-    vhid: u16,
-    vhidd: u16,
-    _pad: [u64; 2]
-}
-
-#[repr(C, packed)]
-struct PollCmd {
-    devno: u32,
-    param: u32,
-    buffer: u32,
-    _pad1: u32,
-    _pad2: [u64; 2]
-}
-
-#[repr(C, packed)]
-struct ReportCmd {
-    devno: u32,
-    param: u32,
-    _pad: [u64; 3]
-}
-
-#[repr(C, packed)]
-struct AttachCmd {
-    devno: u32,
-    param: u32,
-    flags: u32,
-    report_type: u16,
-    report_id: u8,
-    _pad1: u8,
-    _pad2: [u64; 2]
-}
 
 #[repr(C, packed)]
 #[derive(Copy, Clone, Debug)]
@@ -129,49 +74,6 @@ pub struct Hid {
 
 const NO_REPLY: Option<&mut i32> = None;
 
-/// Send a command to the io-hid server.
-/// The command comprises a _IO_MSG header and a command structure.
-fn send_cmd<T, U>(fd: i32, cmd_id: u16, cmd: &T, reply: Option<&mut U>) -> Result<i64, i32> {
-    let hdr = IoMsg {
-        msg_type: _IO_MSG,
-        subtype: cmd_id,
-        mgrid: _IOMGR_HID,
-        combine_len: size_of::<IoMsg>() as u16 + size_of::<PollCmd>() as u16
-    };
-
-    let result = unsafe {
-        // Construct two-part message.
-        let siovs = vec![
-            libc::iovec {
-                iov_base: addr_of!(hdr) as *mut libc::c_void,
-                iov_len: size_of::<IoMsg>()
-            },
-            libc::iovec {
-                iov_base: addr_of!(*cmd) as *mut libc::c_void,
-                iov_len: size_of::<T>()
-            }
-        ];
-
-        // Construct one-part reply buffer.
-        let (reply_addr, reply_len) = match reply {
-            Some(u) => (addr_of!(*u) as *mut libc::c_void,
-                        size_of::<U>()),
-            None => (std::ptr::null_mut(), 0)
-        };
-
-        let riov = libc::iovec { iov_base: reply_addr, iov_len: reply_len };
-
-        // Send the message.
-        libc::MsgSendv_r(fd, addr_of!(siovs[0..1]) as *const libc::iovec, 2,
-                         addr_of!(riov) as *const libc::iovec, 1)
-    };
-
-    if result < 0 {
-        return Err(-result as i32);
-    }
-
-    Ok(result)
-}
 
 /// Safe wrapper for libc::open()
 fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
@@ -191,7 +93,7 @@ fn poll_thread(fd: i32) {
     // Construct a poll command.
     // Once a device is attached, the poll command message can return a report, so the reply needs
     // to include a Report structure.
-    let cmd = PollCmd {
+    let cmd = cmd::PollCmd {
         devno: 0,
         param: 0,
         buffer: size_of::<HidReportEvent>() as u32,
@@ -202,7 +104,7 @@ fn poll_thread(fd: i32) {
     loop {
         // Get an event.
         let mut event = MaybeUninit::<HidReportEvent>::uninit();
-        if let Err(err) = send_cmd(fd, HIDDI_CMD_POLL, &cmd, Some(&mut event)) {
+        if let Err(err) = cmd::send(fd, cmd::POLL, &cmd, Some(&mut event)) {
             println!("Poll thread stopping: {err}");
             break;
         }
@@ -230,14 +132,14 @@ fn device_inserted(event: &HidEvent, fd: i32) {
     let mut device = device::Device::new(dev_inst.devno);
 
     // Send a report command.
-    let cmd = ReportCmd {
+    let cmd = cmd::ReportCmd {
         devno: device.device_number,
         param: report_len as u32,
         _pad: [0, 0, 0]
     };
 
     let mut report_event = MaybeUninit::<HidReportEvent>::uninit();
-    if let Err(err) = send_cmd(fd, HIDDI_CMD_REPORT_DESC, &cmd, Some(&mut report_event)) {
+    if let Err(err) = cmd::send(fd, cmd::REPORT_DESC, &cmd, Some(&mut report_event)) {
         println!("Failed to get report: {err}");
         return;
     }
@@ -257,7 +159,7 @@ fn device_inserted(event: &HidEvent, fd: i32) {
     println!("Found keyboard {}", device.device_number);
 
     // Send an attach command.
-    let cmd = AttachCmd {
+    let cmd = cmd::AttachCmd {
         devno: device.device_number,
         param: 0,
         flags: 0,
@@ -267,7 +169,7 @@ fn device_inserted(event: &HidEvent, fd: i32) {
         _pad2: [ 0, 0 ]
     };
 
-    if let Err(err) = send_cmd(fd, HIDDI_CMD_REPORT_ATTACH, &cmd, NO_REPLY) {
+    if let Err(err) = cmd::send(fd, cmd::REPORT_ATTACH, &cmd, NO_REPLY) {
         println!("Failed to attach device: {err}");
         return;
     }
@@ -279,7 +181,7 @@ impl Hid {
         let fd = open(c"/dev/io-hid/io-hid", libc::O_RDWR)?;
 
         // Send the connect message.
-        let cmd = ConnectCmd {
+        let cmd = cmd::ConnectCmd {
             devno: 0,
             param: 0,
             flags: HIDDI_FLAGS_EVTPOLL | HIDDI_FLAGS_EXCL_ATTACH | HIDDI_FLAGS_ENUMERATE,
@@ -288,7 +190,7 @@ impl Hid {
             _pad: [0, 0]
         };
 
-        send_cmd(fd, HIDDI_CMD_CONNECT, &cmd, NO_REPLY)?;
+        cmd::send(fd, cmd::CONNECT, &cmd, NO_REPLY)?;
 
         // Start the event polling thread.
         let thandle = thread::spawn(move || { poll_thread(fd); });
