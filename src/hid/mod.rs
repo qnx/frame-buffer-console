@@ -220,12 +220,12 @@ fn report_received(event: &HidEvent, device: &Option<Device>) {
         return;
     }
 
-    let input_report = match InputReport::new(&event, device) {
+    let _input_report = match InputReport::new(&event, device) {
         Ok(report) => report,
         Err(()) => { return; }
     };
 
-    println!("Received report for {:?} {:x?}", device, input_report);
+    //println!("Received report for {:?} {:x?}", device, input_report);
 }
 
 impl Hid {

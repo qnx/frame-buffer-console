@@ -4,7 +4,7 @@ use crate::hid::*;
 
 #[derive(Debug)]
 pub struct InputReport {
-    data: Vec<u8>
+    _data: Vec<u8>
 }
 
 impl InputReport {
@@ -31,6 +31,6 @@ impl InputReport {
         }
 
         let report_data = &event.report[data_offset..data_offset + data_len];
-        Ok(InputReport { data: report_data.to_vec() })
+        Ok(InputReport { _data: report_data.to_vec() })
     }
 }
