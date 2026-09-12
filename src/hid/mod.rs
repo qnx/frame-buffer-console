@@ -131,6 +131,7 @@ fn poll_thread(fd: i32) {
 }
 
 fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
+    // Do nothing if we already have a keyboard device.
     if device.is_some() {
         return;
     }
@@ -165,11 +166,14 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
         Err(_) => { println!("Failed to parse report"); return; }
     };
 
+    let (vendid, prodid) = (dev_inst.device_ident.vendor_id,
+                            dev_inst.device_ident.product_id);
+    println!("Found device device={} vendor={:x} product={:x}", device_number,
+             vendid, prodid);
+
     if report.device_type != DeviceType::Keyboard {
         return;
     }
-
-    println!("Found keyboard {}", device_number);
 
     // Send an attach command.
     let cmd = cmd::AttachCmd {
