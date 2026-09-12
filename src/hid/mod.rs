@@ -163,7 +163,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
 
     // Parse the report.
     let event = unsafe { event.assume_init() };
-    let report = match Report::new(&event.report, event.length as usize, false) {
+    let report = match Report::new(&event.report, event.dlen as usize, false) {
         Ok(report) => report,
         Err(_) => { println!("Failed to parse report"); return; }
     };

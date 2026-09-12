@@ -118,7 +118,7 @@ impl Report {
 
             // Parse individual item.
             let item = &data[pos..next_pos];
-            if self.verbose { println!("{:?}", item_type); }
+            if self.verbose { println!("{:x?} {:?}", item, item_type); }
             match item_type {
                 ItemType::Main => self.main_item(item, next_pos - pos)?,
                 ItemType::Global => self.global_item(item, next_pos - pos)?,
