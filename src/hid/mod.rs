@@ -191,7 +191,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
         return;
     }
 
-    *device = Some(Device::new(device_number));
+    *device = Some(Device::new(device_number, report.input_report_len));
 }
 
 fn report_received(event: &HidEvent, device: &Option<Device>) {
@@ -218,7 +218,7 @@ fn report_received(event: &HidEvent, device: &Option<Device>) {
 
     // Extract the data.
     let dlen = event.dlen;
-    if dlen < 8 {
+    if dlen != device.report_len as u16 {
         println!("Bad input report");
         return;
     }

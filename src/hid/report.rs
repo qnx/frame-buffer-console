@@ -1,10 +1,17 @@
-/// Handle report descriptors
+/// Report parser
 
 use crate::hid::device::*;
 
+/// Parsed report structure.
+/// The public fields carry the parsed information, which private fields hold global state used
+/// during parsing.
+/// The console is only interested in input devices.
 pub struct Report {
     pub device_type: DeviceType,
-    pub input_id: u8
+    pub input_id: u8,
+    pub input_report_len: u8,
+    report_id: u8,
+    report_size: u8
 }
 
 #[derive(Debug)]
@@ -71,7 +78,10 @@ enum CollectionType {
 pub fn parse(data: &[u8], len: usize) -> Result<Report, ()> {
     let mut report = Report {
         device_type: DeviceType::Other,
-        input_id: 0
+        input_id: 0,
+        input_report_len: 0,
+        report_id: 0,
+        report_size: 0
     };
 
     let mut pos = 0usize;
@@ -117,7 +127,7 @@ pub fn parse(data: &[u8], len: usize) -> Result<Report, ()> {
     Ok(report)
 }
 
-fn parse_main_item(item: &[u8], len: usize, _report: &mut Report) -> Result<(), ()> {
+fn parse_main_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xfc {
         0x80 => MainItemType::Input,
@@ -131,7 +141,7 @@ fn parse_main_item(item: &[u8], len: usize, _report: &mut Report) -> Result<(), 
     //println!("{:?}", item_type);
     match item_type {
         MainItemType::Collection => parse_collection(item, len)?,
-        MainItemType::Input => parse_input(item, len)?,
+        MainItemType::Input => parse_input(item, len, report)?,
         _ => {}
     }
 
@@ -158,15 +168,17 @@ fn parse_collection(item: &[u8], len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_input(_item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_input(_item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
 
+    report.input_id = report.report_id;
+    report.input_report_len = report.report_size;
     Ok(())
 }
 
-fn parse_global_item(item: &[u8], len: usize, _report: &mut Report) -> Result<(), ()> {
+fn parse_global_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
     let tag = item[0];
     let item_type = match tag & 0xf0 {
         0x00 => GlobalItemType::UsagePage,
@@ -187,7 +199,8 @@ fn parse_global_item(item: &[u8], len: usize, _report: &mut Report) -> Result<()
     //println!("{:?}", item_type);
     match item_type {
         GlobalItemType::UsagePage => parse_usage_page(item, len)?,
-        GlobalItemType::ReportId => parse_report_id(item, len)?,
+        GlobalItemType::ReportId => parse_report_id(item, len, report)?,
+        GlobalItemType::ReportSize => parse_report_size(item, len, report)?,
         _ => {}
     }
 
@@ -202,11 +215,21 @@ fn parse_usage_page(_item: &[u8], len: usize) -> Result<(), ()> {
     Ok(())
 }
 
-fn parse_report_id(_item: &[u8], len: usize) -> Result<(), ()> {
+fn parse_report_id(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
     if len == 1 {
         return Err(());
     }
 
+    report.report_id = item[1];
+    Ok(())
+}
+
+fn parse_report_size(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
+    if len == 1 {
+        return Err(());
+    }
+
+    report.report_size = item[1];
     Ok(())
 }
 
