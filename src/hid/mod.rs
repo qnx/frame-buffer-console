@@ -8,7 +8,9 @@ use libc;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
 use std::mem::MaybeUninit;
-use device::{Device, DeviceType };
+
+use device::{Device, DeviceType};
+use report::Report;
 
 const HID_VERSION: u16 = 0x100;
 const HIDD_VERSION: u16 = 0x100;
@@ -161,7 +163,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
 
     // Parse the report.
     let event = unsafe { event.assume_init() };
-    let report = match report::parse(&event.report, event.length as usize) {
+    let report = match Report::new(&event.report, event.length as usize) {
         Ok(report) => report,
         Err(_) => { println!("Failed to parse report"); return; }
     };

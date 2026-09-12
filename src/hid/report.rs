@@ -75,200 +75,207 @@ enum CollectionType {
     Reserved
 }
 
-pub fn parse(data: &[u8], len: usize) -> Result<Report, ()> {
-    let mut report = Report {
-        device_type: DeviceType::Other,
-        input_id: 0,
-        input_report_len: 0,
-        report_id: 0,
-        report_size: 0
-    };
-
-    let mut pos = 0usize;
-    loop {
-        // Parse the first byte of the item.
-        let item = data[pos];
-        let item_size = match item & 0x3 {
-            0 => 0,
-            1 => 1,
-            2 => 2,
-            _ => 4
+impl Report {
+    pub fn new(data: &[u8], len: usize) -> Result<Report, ()> {
+        let mut report = Report {
+            device_type: DeviceType::Other,
+            input_id: 0,
+            input_report_len: 0,
+            report_id: 0,
+            report_size: 0
         };
 
-        let item_type = match item & 0xc {
-            0 => ItemType::Main,
-            4 => ItemType::Global,
-            8 => ItemType::Local,
-            _ => { return Err(()) } // Reserved/long item
+        report.parse(data, len)?;
+        Ok(report)
+    }
+
+    fn parse(&mut self, data: &[u8], len: usize) -> Result<(), ()> {
+        let mut pos = 0usize;
+        loop {
+            // Parse the first byte of the item.
+            let item = data[pos];
+            let item_size = match item & 0x3 {
+                0 => 0,
+                1 => 1,
+                2 => 2,
+                _ => 4
+            };
+
+            let item_type = match item & 0xc {
+                0 => ItemType::Main,
+                4 => ItemType::Global,
+                8 => ItemType::Local,
+                _ => { return Err(()) } // Reserved/long item
+            };
+
+            // Ensure that the item fits in the report's data.
+            let next_pos = pos + 1 + item_size;
+            if next_pos > len {
+                return Err(());
+            }
+
+            // Parse individual item.
+            let item = &data[pos..next_pos];
+            //println!("{:?}", item_type);
+            match item_type {
+                ItemType::Main => self.main_item(item, next_pos - pos)?,
+                ItemType::Global => self.global_item(item, next_pos - pos)?,
+                ItemType::Local => self.local_item(item, next_pos - pos)?,
+            }
+
+            // Move to the next item.
+            pos = next_pos;
+            if pos == len {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn main_item(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        let tag = item[0];
+        let item_type = match tag & 0xfc {
+            0x80 => MainItemType::Input,
+            0x90 => MainItemType::Output,
+            0xa0 => MainItemType::Collection,
+            0xb0 => MainItemType::Feature,
+            0xc0 => MainItemType::EndCollection,
+            _ => MainItemType::Reserved
         };
 
-        // Ensure that the item fits in the report's data.
-        let next_pos = pos + 1 + item_size;
-        if next_pos > len {
+        //println!("{:?}", item_type);
+        match item_type {
+            MainItemType::Collection => self.collection(item, len)?,
+            MainItemType::Input => self.input(item, len)?,
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn collection(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        if len == 1 {
             return Err(());
         }
 
-        // Parse individual item.
-        let item = &data[pos..next_pos];
+        let _coll_type = match item[1] {
+            0x00 => CollectionType::Physical,
+            0x01 => CollectionType::Application,
+            0x02 => CollectionType::Logical,
+            0x03 => CollectionType::Report,
+            0x04 => CollectionType::NamedArray,
+            0x05 => CollectionType::UsageSwitch,
+            0x06 => CollectionType::UsageModifier,
+            _ => CollectionType::Reserved
+        };
+
+        //println!("{:?}", coll_type);
+        Ok(())
+    }
+
+    fn input(&mut self ,_item: &[u8], len: usize) -> Result<(), ()> {
+        if len == 1 {
+            return Err(());
+        }
+
+        self.input_id = self.report_id;
+        self.input_report_len = self.report_size;
+        Ok(())
+    }
+
+    fn global_item(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        let tag = item[0];
+        let item_type = match tag & 0xf0 {
+            0x00 => GlobalItemType::UsagePage,
+            0x10 => GlobalItemType::LogicalMinimum,
+            0x20 => GlobalItemType::LogicalMaximum,
+            0x30 => GlobalItemType::PhysicalMinimum,
+            0x40 => GlobalItemType::PhysicalMaximum,
+            0x50 => GlobalItemType::UnitExponent,
+            0x60 => GlobalItemType::Unit,
+            0x70 => GlobalItemType::ReportSize,
+            0x80 => GlobalItemType::ReportId,
+            0x90 => GlobalItemType::ReportCount,
+            0xa0 => GlobalItemType::Push,
+            0xb0 => GlobalItemType::Pop,
+            _ => GlobalItemType::Reserved
+        };
+
         //println!("{:?}", item_type);
         match item_type {
-            ItemType::Main => parse_main_item(item, next_pos - pos, &mut report)?,
-            ItemType::Global => parse_global_item(item, next_pos - pos, &mut report)?,
-            ItemType::Local => parse_local_item(item, next_pos - pos, &mut report)?,
+            GlobalItemType::UsagePage => self.usage_page(item, len)?,
+            GlobalItemType::ReportId => self.report_id(item, len)?,
+            GlobalItemType::ReportSize => self.report_size(item, len)?,
+            _ => {}
         }
 
-        // Move to the next item.
-        pos = next_pos;
-        if pos == len {
-            break;
+        Ok(())
+    }
+
+    fn usage_page(&mut self, _item: &[u8], len: usize) -> Result<(), ()> {
+        if len == 1 {
+            return Err(());
         }
+
+        Ok(())
     }
 
-    Ok(report)
-}
+    fn report_id(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        if len == 1 {
+            return Err(());
+        }
 
-fn parse_main_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    let tag = item[0];
-    let item_type = match tag & 0xfc {
-        0x80 => MainItemType::Input,
-        0x90 => MainItemType::Output,
-        0xa0 => MainItemType::Collection,
-        0xb0 => MainItemType::Feature,
-        0xc0 => MainItemType::EndCollection,
-        _ => MainItemType::Reserved
-    };
-
-    //println!("{:?}", item_type);
-    match item_type {
-        MainItemType::Collection => parse_collection(item, len)?,
-        MainItemType::Input => parse_input(item, len, report)?,
-        _ => {}
+        self.report_id = item[1];
+        Ok(())
     }
 
-    Ok(())
-}
+    fn report_size(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        if len == 1 {
+            return Err(());
+        }
 
-fn parse_collection(item: &[u8], len: usize) -> Result<(), ()> {
-    if len == 1 {
-        return Err(());
+        self.report_size = item[1];
+        Ok(())
     }
 
-    let _coll_type = match item[1] {
-        0x00 => CollectionType::Physical,
-        0x01 => CollectionType::Application,
-        0x02 => CollectionType::Logical,
-        0x03 => CollectionType::Report,
-        0x04 => CollectionType::NamedArray,
-        0x05 => CollectionType::UsageSwitch,
-        0x06 => CollectionType::UsageModifier,
-        _ => CollectionType::Reserved
-    };
+    fn local_item(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        let tag = item[0];
+        let item_type = match tag & 0xf0 {
+            0x00 => LocalItemType::Usage,
+            0x10 => LocalItemType::UsageMinimum,
+            0x20 => LocalItemType::UsageMaximum,
+            0x30 => LocalItemType::DesignatorIndex,
+            0x40 => LocalItemType::DesignatorMinimum,
+            0x50 => LocalItemType::DesignatorMaximum,
+            0x70 => LocalItemType::StringIndex,
+            0x80 => LocalItemType::StringMinimum,
+            0x90 => LocalItemType::StringMaximum,
+            0xa0 => LocalItemType::Delimiter,
+            _ => LocalItemType::Reserved
+        };
 
-    //println!("{:?}", coll_type);
-    Ok(())
-}
+        //println!("{:?}", item_type);
+        match item_type {
+        LocalItemType::Usage => self.usage(item, len)?,
+            _ => {}
+        }
 
-fn parse_input(_item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    if len == 1 {
-        return Err(());
+        Ok(())
     }
 
-    report.input_id = report.report_id;
-    report.input_report_len = report.report_size;
-    Ok(())
-}
+    fn usage(&mut self, item: &[u8], len: usize) -> Result<(), ()> {
+        if len == 1 {
+            return Err(());
+        }
 
-fn parse_global_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    let tag = item[0];
-    let item_type = match tag & 0xf0 {
-        0x00 => GlobalItemType::UsagePage,
-        0x10 => GlobalItemType::LogicalMinimum,
-        0x20 => GlobalItemType::LogicalMaximum,
-        0x30 => GlobalItemType::PhysicalMinimum,
-        0x40 => GlobalItemType::PhysicalMaximum,
-        0x50 => GlobalItemType::UnitExponent,
-        0x60 => GlobalItemType::Unit,
-        0x70 => GlobalItemType::ReportSize,
-        0x80 => GlobalItemType::ReportId,
-        0x90 => GlobalItemType::ReportCount,
-        0xa0 => GlobalItemType::Push,
-        0xb0 => GlobalItemType::Pop,
-        _ => GlobalItemType::Reserved
-    };
+        match item[1] {
+            0x01 => self.device_type = DeviceType::Mouse,
+            0x02 => self.device_type = DeviceType::Mouse,
+            0x06 => self.device_type = DeviceType::Keyboard,
+            _ => {}
+        }
 
-    //println!("{:?}", item_type);
-    match item_type {
-        GlobalItemType::UsagePage => parse_usage_page(item, len)?,
-        GlobalItemType::ReportId => parse_report_id(item, len, report)?,
-        GlobalItemType::ReportSize => parse_report_size(item, len, report)?,
-        _ => {}
+        Ok(())
     }
-
-    Ok(())
-}
-
-fn parse_usage_page(_item: &[u8], len: usize) -> Result<(), ()> {
-    if len == 1 {
-        return Err(());
-    }
-
-    Ok(())
-}
-
-fn parse_report_id(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    if len == 1 {
-        return Err(());
-    }
-
-    report.report_id = item[1];
-    Ok(())
-}
-
-fn parse_report_size(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    if len == 1 {
-        return Err(());
-    }
-
-    report.report_size = item[1];
-    Ok(())
-}
-
-fn parse_local_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    let tag = item[0];
-    let item_type = match tag & 0xf0 {
-        0x00 => LocalItemType::Usage,
-        0x10 => LocalItemType::UsageMinimum,
-        0x20 => LocalItemType::UsageMaximum,
-        0x30 => LocalItemType::DesignatorIndex,
-        0x40 => LocalItemType::DesignatorMinimum,
-        0x50 => LocalItemType::DesignatorMaximum,
-        0x70 => LocalItemType::StringIndex,
-        0x80 => LocalItemType::StringMinimum,
-        0x90 => LocalItemType::StringMaximum,
-        0xa0 => LocalItemType::Delimiter,
-        _ => LocalItemType::Reserved
-    };
-
-    //println!("{:?}", item_type);
-    match item_type {
-        LocalItemType::Usage => parse_usage(item, len, report)?,
-        _ => {}
-    }
-
-    Ok(())
-}
-
-fn parse_usage(item: &[u8], len: usize, report: &mut Report) -> Result<(), ()> {
-    if len == 1 {
-        return Err(());
-    }
-
-    match item[1] {
-        0x01 => report.device_type = DeviceType::Mouse,
-        0x02 => report.device_type = DeviceType::Mouse,
-        0x06 => report.device_type = DeviceType::Keyboard,
-        _ => {}
-    }
-
-    Ok(())
 }
