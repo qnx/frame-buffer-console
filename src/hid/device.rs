@@ -9,11 +9,11 @@ pub enum DeviceType {
 
 #[derive(Debug)]
 pub struct Device {
-    pub _device_number: u32,
+    pub device_number: u32,
 }
 
 impl Device {
     pub fn new(device_number: u32) -> Device {
-        Device { _device_number: device_number }
+        Device { device_number: device_number }
     }
 }

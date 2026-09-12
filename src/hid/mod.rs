@@ -45,9 +45,20 @@ struct HidDeviceInstance {
 }
 
 #[repr(C, packed)]
+#[derive(Copy, Clone, Debug)]
+struct HidReport {
+    devno: u32,
+    report_type: u32,
+    flags: u32,
+    report_id: u8,
+    reserved: [u8; 3]
+}
+
+#[repr(C, packed)]
 union HidEventPerType {
     insertion: HidDeviceInstance,
     removal: HidDeviceInstance,
+    report: HidReport
 }
 
 const MAX_REPORT_LEN: usize = 200;
@@ -110,8 +121,6 @@ fn poll_thread(fd: i32) {
         }
 
         let event = unsafe { event.assume_init() };
-        let (etype, elen) = (event.event_type, event.length);
-        println!("{etype} {elen}");
         match event.event_type {
             HIDDI_EVT_INSERTION => device_inserted(&event, fd, &mut device),
             HIDDI_EVT_HID_REPORT => report_received(&event, &device),
@@ -181,7 +190,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
     *device = Some(Device::new(device_number));
 }
 
-fn report_received(_event: &HidEvent, device: &Option<Device>) {
+fn report_received(event: &HidEvent, device: &Option<Device>) {
     let device = match device {
         None => {
             println!("Report without a device");
@@ -190,7 +199,28 @@ fn report_received(_event: &HidEvent, device: &Option<Device>) {
         Some(device) => device
     };
 
-    println!("Received report for {:?}", device);
+    // Only interested in input reports for the registered device.
+    let (devno, report_type) = unsafe {
+        (event.event.report.devno, event.event.report.report_type)
+    };
+
+    if devno != device.device_number {
+        return;
+    }
+
+    if report_type != HID_REPORT_INPUT as u32 {
+        return;
+    }
+
+    // Extract the data.
+    let dlen = event.dlen;
+    if dlen < 8 {
+        println!("Bad input report");
+        return;
+    }
+
+    let report_data = &event.report[0..8];
+    println!("Received report for {:?} {:x?}", device, report_data);
 }
 
 impl Hid {

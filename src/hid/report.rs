@@ -100,7 +100,7 @@ pub fn parse(data: &[u8], len: usize) -> Result<Report, ()> {
 
         // Parse individual item.
         let item = &data[pos..next_pos];
-        println!("{:?}", item_type);
+        //println!("{:?}", item_type);
         match item_type {
             ItemType::Main => parse_main_item(item, next_pos - pos, &mut report)?,
             ItemType::Global => parse_global_item(item, next_pos - pos, &mut report)?,
@@ -128,7 +128,7 @@ fn parse_main_item(item: &[u8], len: usize, _report: &mut Report) -> Result<(), 
         _ => MainItemType::Reserved
     };
 
-    println!("{:?}", item_type);
+    //println!("{:?}", item_type);
     match item_type {
         MainItemType::Collection => parse_collection(item, len)?,
         MainItemType::Input => parse_input(item, len)?,
@@ -143,7 +143,7 @@ fn parse_collection(item: &[u8], len: usize) -> Result<(), ()> {
         return Err(());
     }
 
-    let coll_type = match item[1] {
+    let _coll_type = match item[1] {
         0x00 => CollectionType::Physical,
         0x01 => CollectionType::Application,
         0x02 => CollectionType::Logical,
@@ -154,7 +154,7 @@ fn parse_collection(item: &[u8], len: usize) -> Result<(), ()> {
         _ => CollectionType::Reserved
     };
 
-    println!("{:?}", coll_type);
+    //println!("{:?}", coll_type);
     Ok(())
 }
 
@@ -184,7 +184,7 @@ fn parse_global_item(item: &[u8], len: usize, _report: &mut Report) -> Result<()
         _ => GlobalItemType::Reserved
     };
 
-    println!("{:?}", item_type);
+    //println!("{:?}", item_type);
     match item_type {
         GlobalItemType::UsagePage => parse_usage_page(item, len)?,
         GlobalItemType::ReportId => parse_report_id(item, len)?,
@@ -226,7 +226,7 @@ fn parse_local_item(item: &[u8], len: usize, report: &mut Report) -> Result<(), 
         _ => LocalItemType::Reserved
     };
 
-    println!("{:?}", item_type);
+    //println!("{:?}", item_type);
     match item_type {
         LocalItemType::Usage => parse_usage(item, len, report)?,
         _ => {}
