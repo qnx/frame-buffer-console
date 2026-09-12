@@ -1,5 +1,9 @@
 /// Report parser
 
+// FIXME:
+// Incomplete. Need to determine exactly which items belong to the keyboard input that is of
+// interest. Right now the last input item will override previous ones, which may not be correct.
+
 use crate::hid::device::*;
 
 /// Parsed report structure.
