@@ -63,7 +63,7 @@ union HidEventPerType {
     report: HidReport
 }
 
-const MAX_REPORT_LEN: usize = 200;
+const MAX_REPORT_LEN: usize = 180;
 
 #[repr(C, packed)]
 struct HidEvent {
@@ -219,13 +219,27 @@ fn report_received(event: &HidEvent, device: &Option<Device>) {
     }
 
     // Extract the data.
-    let dlen = event.dlen;
-    if dlen != device.report_len as u16 {
+    const HID_EVENT_SIZE: usize = size_of::<HidEvent>() - MAX_REPORT_LEN;
+    let event_length = event.length as usize;
+    if event_length < HID_EVENT_SIZE {
         println!("Bad input report");
         return;
     }
 
-    let report_data = &event.report[0..8];
+    let data_offset = event_length - HID_EVENT_SIZE;
+
+    let data_len = event.dlen as usize;
+    if data_len != device.report_len as usize {
+        println!("Bad input report");
+        return;
+    }
+
+    if data_len + data_offset > MAX_REPORT_LEN {
+        println!("Bad input report");
+        return;
+    }
+
+    let report_data = &event.report[data_offset..data_offset + data_len];
     println!("Received report for {:?} {:x?}", device, report_data);
 }
 
