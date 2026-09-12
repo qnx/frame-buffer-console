@@ -11,7 +11,8 @@ pub struct Report {
     pub input_id: u8,
     pub input_report_len: u8,
     report_id: u8,
-    report_size: u8
+    report_size: u8,
+    verbose: bool
 }
 
 #[derive(Debug)]
@@ -76,13 +77,14 @@ enum CollectionType {
 }
 
 impl Report {
-    pub fn new(data: &[u8], len: usize) -> Result<Report, ()> {
+    pub fn new(data: &[u8], len: usize, verbose: bool) -> Result<Report, ()> {
         let mut report = Report {
             device_type: DeviceType::Other,
             input_id: 0,
             input_report_len: 0,
             report_id: 0,
-            report_size: 0
+            report_size: 0,
+            verbose
         };
 
         report.parse(data, len)?;
@@ -116,7 +118,7 @@ impl Report {
 
             // Parse individual item.
             let item = &data[pos..next_pos];
-            //println!("{:?}", item_type);
+            if self.verbose { println!("{:?}", item_type); }
             match item_type {
                 ItemType::Main => self.main_item(item, next_pos - pos)?,
                 ItemType::Global => self.global_item(item, next_pos - pos)?,
@@ -144,7 +146,7 @@ impl Report {
             _ => MainItemType::Reserved
         };
 
-        //println!("{:?}", item_type);
+        if self.verbose { println!("{:?}", item_type); }
         match item_type {
             MainItemType::Collection => self.collection(item, len)?,
             MainItemType::Input => self.input(item, len)?,
@@ -159,7 +161,7 @@ impl Report {
             return Err(());
         }
 
-        let _coll_type = match item[1] {
+        let coll_type = match item[1] {
             0x00 => CollectionType::Physical,
             0x01 => CollectionType::Application,
             0x02 => CollectionType::Logical,
@@ -170,7 +172,7 @@ impl Report {
             _ => CollectionType::Reserved
         };
 
-        //println!("{:?}", coll_type);
+        if self.verbose { println!("{:?}", coll_type); }
         Ok(())
     }
 
@@ -202,7 +204,7 @@ impl Report {
             _ => GlobalItemType::Reserved
         };
 
-        //println!("{:?}", item_type);
+        if self.verbose { println!("{:?}", item_type); }
         match item_type {
             GlobalItemType::UsagePage => self.usage_page(item, len)?,
             GlobalItemType::ReportId => self.report_id(item, len)?,
@@ -255,7 +257,7 @@ impl Report {
             _ => LocalItemType::Reserved
         };
 
-        //println!("{:?}", item_type);
+        if self.verbose { println!("{:?}", item_type); }
         match item_type {
         LocalItemType::Usage => self.usage(item, len)?,
             _ => {}
