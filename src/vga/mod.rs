@@ -32,7 +32,7 @@ const PALETTE: [u32; 16] = [
     0xFFFFFFFF, // 15 - bright white
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Rect {
     left: u32,
     top: u32,
@@ -62,7 +62,7 @@ fn screen_update_thread(screen_lock: Mutex::<Screen>, screen_cond: Condvar,
     loop {
         // Determine size of rectangle to update. If it is first or last row or column, update
         // to the edge of the screen.
-        let mut rect = screen.dirty.clone();
+        let mut rect = screen.get_rect();
         if rect.right >= screen.columns {
             rect.right = screen.columns - 1;
         }

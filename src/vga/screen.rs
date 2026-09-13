@@ -8,7 +8,7 @@ pub struct Screen {
     pub buffer: Vec<ScreenChar>,
     pub columns: u32,
     pub rows: u32,
-    pub dirty: Rect
+    dirty: Rect
 }
 
 /// A character on the screen.
@@ -42,5 +42,12 @@ impl Screen {
         // Would like to report allocation error rather than panic.
         screen.buffer.resize((columns * rows) as usize, BLANK_CHAR);
         Ok(screen)
+    }
+
+    /// Get the current dirty rectangle and reset to an empty one.
+    pub fn get_rect(&mut self) -> Rect {
+        let rect = self.dirty;
+        self.dirty = Rect { left: self.columns, top: self.rows, right: 0, bottom: 0 };
+        rect
     }
 }
