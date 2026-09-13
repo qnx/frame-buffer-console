@@ -20,7 +20,6 @@ struct VgaObj {
     framebuffer: FrameBuffer,
     screen: Mutex<Screen>,
     cond: Condvar,
-    cursor: Cursor,
     font: &'static Font
 }
 
@@ -75,7 +74,6 @@ impl Vga {
                 framebuffer,
                 screen,
                 cond: Condvar::new(),
-                cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 },
                 font
             })
         };
@@ -86,9 +84,14 @@ impl Vga {
         Ok(vga)
     }
 
-    pub fn set_char(&mut self, chr: ScreenChar, col: u32, row: u32) {
+    pub fn display_char(&mut self, chr: u8, attr: u8, col: u32, row: u32, update_cursor: bool) {
         let mut screen = self.obj.screen.lock().unwrap();
-        screen.set_char(chr, col, row);
+        screen.set_char(ScreenChar { chr, attr }, col, row);
+        if update_cursor {
+            screen.cursor.col = col;
+            screen.cursor.row = row;
+        }
+
         self.obj.cond.notify_one();
     }
 }
@@ -113,21 +116,19 @@ fn screen_update_thread(vga: Arc<VgaObj>) {
 
 fn draw_screen(vga: &VgaObj, screen: &Screen, rect: &Rect) {
     for row in rect.top..=rect.bottom {
-        let from = (row * screen.columns) as usize;
-        let chrs = &screen.buffer[from..];
-
         for col in rect.left..=rect.right {
-            draw_glyph(&vga, &chrs[col as usize], col, row);
+            draw_glyph(&vga, screen, col, row);
         }
     }
 }
 
 /// Draw the glyph of a given character into the frame buffer at the specified column and row.
-fn draw_glyph(vga: &VgaObj, chr: &ScreenChar, col: u32, row: u32) {
+fn draw_glyph(vga: &VgaObj, screen: &Screen, col: u32, row: u32) {
     const BYTES_PER_PIXEL: u64 = size_of::<u32>() as u64;
 
     let font = vga.font;
     let framebuffer = &vga.framebuffer;
+    let chr = &screen.buffer[((row * screen.columns) + col) as usize];
 
     // Don't render past right side of the frame.
     let font_width = font.width as u64;
@@ -137,7 +138,7 @@ fn draw_glyph(vga: &VgaObj, chr: &ScreenChar, col: u32, row: u32) {
         return;
     }
 
-    let is_cursor = (col == vga.cursor.col) && (row == vga.cursor.row);
+    let is_cursor = (col == screen.cursor.col) && (row == screen.cursor.row);
 
     // Determine foreground and background colours.
     let mut fg = PALETTE[(chr.attr & 0xf) as usize];
@@ -154,7 +155,7 @@ fn draw_glyph(vga: &VgaObj, chr: &ScreenChar, col: u32, row: u32) {
 
         if is_cursor {
             // Drawing glyph in the cursor position.
-            if (i >= vga.cursor.top) && (i <= vga.cursor.bottom) {
+            if (i >= screen.cursor.top) && (i <= screen.cursor.bottom) {
                 // Inside block, use inverted colours.
                 fg = PALETTE[((chr.attr >> 4) & 0xf) as usize];
                 bg = PALETTE[(chr.attr & 0x7) as usize];

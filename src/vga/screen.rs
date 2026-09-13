@@ -1,13 +1,13 @@
 /// The logical contents of the screen
 
 use crate::vga::font::Font;
-use crate::vga::{Rect, ScreenChar};
+use crate::vga::{Rect, ScreenChar, Cursor};
 
-#[derive(Debug)]
 pub struct Screen {
     pub buffer: Vec<ScreenChar>,
     pub columns: u32,
     pub rows: u32,
+    pub cursor: Cursor,
     dirty: Rect
 }
 
@@ -26,6 +26,7 @@ impl Screen {
             columns,
             rows,
             dirty: Rect { left: 0, top: 0, right: columns, bottom: rows },
+            cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 }
         };
 
         // Start with a clear screen.
