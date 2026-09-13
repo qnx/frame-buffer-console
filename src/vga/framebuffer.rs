@@ -4,10 +4,10 @@ use crate::vga::libc_missing;
 
 #[derive(Debug)]
 pub struct FrameBuffer {
-    addr: *mut u32,
+    pub addr: u64,
     pub width: u32,
     pub height: u32,
-    stride: u32
+    pub stride: u32
 }
 
 #[repr(C, packed)]
@@ -45,7 +45,7 @@ fn hwi_framebuffer() -> Result<HwiFrameBuffer, ()> {
 }
 
 /// Map the physical address of the frame buffer.
-fn map_framebuffer(paddr: u64, len: usize) -> Result<*mut u32, ()> {
+fn map_framebuffer(paddr: u64, len: usize) -> Result<u64, ()> {
     let vaddr = unsafe {
             libc::mmap(std::ptr::null_mut(), len,
                        libc::PROT_READ | libc::PROT_WRITE | libc_missing::PROT_NOCACHE,
@@ -57,7 +57,7 @@ fn map_framebuffer(paddr: u64, len: usize) -> Result<*mut u32, ()> {
         return Err(());
     }
 
-    Ok(vaddr as *mut u32)
+    Ok(vaddr as u64)
 }
 
 impl FrameBuffer {

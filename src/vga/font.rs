@@ -266,19 +266,15 @@ const FONT_8X8_BITMAP: [u8; 2048] = [
 
 pub struct Font {
     /// Width in pixels to display
-    pub width: u32,
+    pub width: u8,
     /// Height in pixels to display
-    pub height: u32,
+    pub height: u8,
     /// Number of bits for width in table
-    wbits: u32,
+    pub wbits: u8,
     /// umber of bits for height in table
-    hbits: u32,
-    /// Number of characters in table
-    nchars: u32,
-    /// Index of character to use if not within base/num
-    np_alt: u32,
+    pub hbits: u8,
     /// Font bitmap
-    bitmap: &'static [u8]
+    pub bitmap: &'static [u8]
 }
 
 pub const FONT_8X8: Font = Font {
@@ -286,7 +282,5 @@ pub const FONT_8X8: Font = Font {
     height: 8,
     wbits: 8,
     hbits: 8,
-    nchars: 256,
-    np_alt: 0,
     bitmap: &FONT_8X8_BITMAP
 };
