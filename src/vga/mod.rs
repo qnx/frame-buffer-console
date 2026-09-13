@@ -4,13 +4,29 @@ mod font;
 mod libc_missing;
 
 use framebuffer::FrameBuffer;
-use screen::{Screen, ScreenChar};
+use screen::Screen;
 use font::Font;
 
-use std::sync::{Mutex, Condvar};
+use std::sync::{Arc, Mutex, Condvar};
 use std::thread;
 
 pub struct Vga {
+    obj: Arc<VgaObj>
+}
+
+struct VgaObj {
+    framebuffer: FrameBuffer,
+    screen: Mutex<Screen>,
+    cond: Condvar,
+}
+
+/// A character on the screen.
+/// Every position on the screen is represented by two bytes, the character and attributes (colour,
+/// background, etc.).
+#[derive(Clone, Debug)]
+pub struct ScreenChar {
+    pub chr: u8,
+    pub attr: u8
 }
 
 const PALETTE: [u32; 16] = [
@@ -47,18 +63,27 @@ impl Vga {
 
         // Construct the screen object.
         let screen = Screen::new(framebuffer.width, framebuffer.height, &font::FONT_8X8)?;
-        let screen_lock = Mutex::<Screen>::new(screen);
-        let screen_cond = Condvar::new();
+        let screen = Mutex::<Screen>::new(screen);
+
+        let vga = Vga {
+            obj: Arc::<VgaObj>::new(VgaObj { framebuffer, screen, cond: Condvar::new() })
+        };
 
         // Start the screen update thread.
-        thread::spawn(|| { screen_update_thread(screen_lock, screen_cond, framebuffer); });
-        Ok(Vga {})
+        let cloned_vga = vga.obj.clone();
+        thread::spawn(move || { screen_update_thread(cloned_vga); });
+        Ok(vga)
+    }
+
+    pub fn set_char(&mut self, chr: ScreenChar, col: u32, row: u32) {
+        let mut screen = self.obj.screen.lock().unwrap();
+        screen.set_char(chr, col, row);
+        self.obj.cond.notify_one();
     }
 }
 
-fn screen_update_thread(screen_lock: Mutex::<Screen>, screen_cond: Condvar,
-                        framebuffer: FrameBuffer) {
-    let mut screen = screen_lock.lock().unwrap();
+fn screen_update_thread(vga: Arc<VgaObj>) {
+    let mut screen = vga.screen.lock().unwrap();
     loop {
         // Determine size of rectangle to update. If it is first or last row or column, update
         // to the edge of the screen.
@@ -70,8 +95,8 @@ fn screen_update_thread(screen_lock: Mutex::<Screen>, screen_cond: Condvar,
             rect.bottom = screen.rows - 1;
         }
 
-        draw_screen(&screen, &framebuffer, &rect);
-        screen = screen_cond.wait(screen).unwrap();
+        draw_screen(&screen, &vga.framebuffer, &rect);
+        screen = vga.cond.wait(screen).unwrap();
     }
 }
 

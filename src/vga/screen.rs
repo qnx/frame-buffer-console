@@ -1,7 +1,7 @@
 /// The logical contents of the screen
 
 use crate::vga::font::Font;
-use crate::vga::Rect;
+use crate::vga::{Rect, ScreenChar};
 
 #[derive(Debug)]
 pub struct Screen {
@@ -9,15 +9,6 @@ pub struct Screen {
     pub columns: u32,
     pub rows: u32,
     dirty: Rect
-}
-
-/// A character on the screen.
-/// Every position on the screen is represented by two bytes, the character and attributes (colour,
-/// background, etc.).
-#[derive(Clone, Debug)]
-pub struct ScreenChar {
-    pub chr: u8,
-    pub attr: u8
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
@@ -49,5 +40,26 @@ impl Screen {
         let rect = self.dirty;
         self.dirty = Rect { left: self.columns, top: self.rows, right: 0, bottom: 0 };
         rect
+    }
+
+    pub fn set_char(&mut self, chr: ScreenChar, col: u32, row: u32) {
+        if col >= self.columns || row > self.rows {
+            return;
+        }
+
+        let pos = (row * self.columns + col) as usize;
+        self.buffer[pos] = chr;
+        if col < self.dirty.left {
+            self.dirty.left = col;
+        }
+        if col > self.dirty.right {
+            self.dirty.right = col;
+        }
+        if row < self.dirty.top {
+            self.dirty.top = row;
+        }
+        if row > self.dirty.bottom {
+            self.dirty.bottom = row;
+        }
     }
 }
