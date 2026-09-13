@@ -36,13 +36,6 @@ impl Screen {
         Ok(screen)
     }
 
-    /// Get the current dirty rectangle and reset to an empty one.
-    pub fn get_rect(&mut self) -> Rect {
-        let rect = self.dirty;
-        self.dirty = Rect { left: self.columns, top: self.rows, right: 0, bottom: 0 };
-        rect
-    }
-
     pub fn set_char(&mut self, chr: ScreenChar, col: u32, row: u32) {
         if col >= self.columns || row > self.rows {
             return;
@@ -50,17 +43,74 @@ impl Screen {
 
         let pos = (row * self.columns + col) as usize;
         self.buffer[pos] = chr;
-        if col < self.dirty.left {
-            self.dirty.left = col;
+    }
+
+    /// Get the current dirty rectangle and reset to an empty one.
+    pub fn get_rect(&mut self) -> Rect {
+        let rect = self.dirty;
+        self.dirty = Rect { left: self.columns, top: self.rows, right: 0, bottom: 0 };
+        rect
+    }
+
+    /// Mark a region as dirty.
+    /// The region is combined with the existing dirty rectangle.
+    pub fn set_dirty(&mut self, col: u32, row: u32, nchars: u32) -> bool {
+        let mut is_dirty = false;
+
+        if col + nchars > self.columns {
+            // Multi-line update.
+            // Extend the rectangle horizontally to include complete rows.
+            if self.dirty.left > 0 {
+                self.dirty.left = 0;
+                is_dirty = true;
+            }
+
+            if self.dirty.right < self.columns - 1 {
+                self.dirty.right = self.columns - 1;
+                is_dirty = true;
+            }
+
+            // Calculate the rows to include.
+            if row < self.dirty.top {
+                self.dirty.top = row;
+                is_dirty = true;
+            }
+
+            let mut bottom = row + (col + nchars) / self.columns;
+            if bottom >= self.rows {
+                bottom = self.rows - 1;
+            }
+
+            if bottom > self.dirty.bottom {
+                self.dirty.bottom = bottom;
+                is_dirty = true;
+            }
+        } else {
+            // Single line update.
+            if col < self.dirty.left {
+                self.dirty.left = col;
+                is_dirty = true;
+            }
+
+            if row < self.dirty.top {
+                self.dirty.top = row;
+                is_dirty = true;
+            }
+
+            // We already know that col + nchars - 1 < self.columns.
+            let right = col + nchars - 1;
+            if right > self.dirty.right {
+                self.dirty.right = right;
+                is_dirty = true;
+            }
+
+            if row > self.dirty.bottom {
+                self.dirty.bottom = row;
+                is_dirty = true;
+            }
         }
-        if col > self.dirty.right {
-            self.dirty.right = col;
-        }
-        if row < self.dirty.top {
-            self.dirty.top = row;
-        }
-        if row > self.dirty.bottom {
-            self.dirty.bottom = row;
-        }
+
+        println!("{:?} {is_dirty}", self.dirty);
+        is_dirty
     }
 }
