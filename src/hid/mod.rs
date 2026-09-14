@@ -141,7 +141,7 @@ fn poll_thread(fd: i32, mut vga: Vga) {
         match event.event_type {
             HIDDI_EVT_INSERTION => device_inserted(&event, fd, &mut device),
             HIDDI_EVT_HID_REPORT => report_received(&event, &mut device, &mut vga),
-            HIDDI_EVT_REMOVAL => println!("Device removed"),
+            HIDDI_EVT_REMOVAL => device_removed(&event, &mut device),
             event_type => println!("Received event {event_type}")
         };
     }
@@ -209,6 +209,22 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Keyboard>) {
     }
 
     *device = Some(Keyboard::new(device_number, report.input_report_len));
+}
+
+fn device_removed(event: &HidEvent, device: &mut Option<Keyboard>) {
+    let keyboard = match device {
+        Some(device) => device,
+        None => { return; }
+    };
+
+    // Extract the removal event.
+    let dev_inst = unsafe { event.event.removal };
+    let device_number = dev_inst.devno;
+
+    if device_number == keyboard.device_number {
+        // Primary device removed.
+        *device = None;
+    }
 }
 
 fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
