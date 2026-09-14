@@ -1,5 +1,7 @@
 mod hid;
 mod vga;
+mod qnxmsg;
+mod serial;
 
 use std::thread;
 use std::time::Duration;
