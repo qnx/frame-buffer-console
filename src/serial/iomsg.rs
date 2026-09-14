@@ -77,6 +77,26 @@ impl IoMsgImpl for SerialServer {
         Ok(())
     }
 
+    /// Handle an _IO_DUP message.
+    fn dup(&mut self, msg: &DupMsg, trans: &mut Transaction)
+           -> Result<(), i32> {
+        // Get the session object for the duplicated fd.
+        let session_ref = match self.session_table.get((msg.pid as i64, msg.coid)) {
+            None => { return Err(libc::EBADF); },
+            Some(s) => s
+        };
+
+        // FIXME:
+        // Permission checks for cross-process.
+
+        // Add a reference to the same session to the session table for the
+        // current fd.
+        let session_ref = session_ref.clone();
+        self.session_table.add(trans.session_id(), &session_ref);
+        trans.reply(0);
+        Ok(())
+    }
+
     /// Handle an _IO_DEVCTL message.
     fn devctl(&mut self, _msg: &DevctlMsg, trans: &mut Transaction)
             -> Result<(), i32> {
