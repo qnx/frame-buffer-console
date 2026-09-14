@@ -10,3 +10,14 @@ pub struct Cursor {
     /// Last visible line.
     pub bottom: u8,
 }
+
+pub enum CursorDir {
+    _Left,
+    _Right,
+    _Up,
+    _Down,
+    /// Right with wrap to the next line.
+    Forward,
+    /// Left with wrap to the previous line.
+    _Back
+}

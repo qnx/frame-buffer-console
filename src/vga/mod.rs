@@ -7,7 +7,7 @@ mod libc_missing;
 use framebuffer::FrameBuffer;
 use screen::Screen;
 use font::Font;
-use cursor::Cursor;
+use cursor::{Cursor, CursorDir};
 
 use std::sync::{Arc, Mutex, Condvar};
 use std::thread;
@@ -84,18 +84,17 @@ impl Vga {
         Ok(vga)
     }
 
-    pub fn display_char(&mut self, chr: u8, attr: u8, col: u32, row: u32, update_cursor: bool) {
-        println!("display_char: {chr} {attr} {col} {row}");
+    pub fn insert_char_at_cursor(&mut self, chr: u8, attr: u8, update_cursor: bool) {
         let mut screen = self.obj.screen.lock().unwrap();
-        let mut is_dirty;
+        let (col, row) = (screen.cursor.col, screen.cursor.row);
+
         screen.set_char(ScreenChar { chr, attr }, col, row);
-        is_dirty = screen.set_dirty(col, row, 1);
+        let mut is_dirty = screen.set_dirty(col, row, 1);
 
         if update_cursor {
-            let (cursor_col, cursor_row) = (screen.cursor.col, screen.cursor.row);
-            is_dirty = screen.set_dirty(cursor_col, cursor_row, 1) || is_dirty;
-            screen.cursor.col = col;
-            screen.cursor.row = row;
+            screen.move_cursor(CursorDir::Forward);
+            let (col, row) = (screen.cursor.col, screen.cursor.row);
+            is_dirty = screen.set_dirty(col, row, 1) || is_dirty;
         }
 
         if is_dirty {
