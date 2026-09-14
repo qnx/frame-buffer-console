@@ -10,17 +10,17 @@ pub mod session;
 pub mod channel;
 mod msgbuf;
 
-pub const RESMGR_FLAG_DIR: u32 = 0x100;
-pub const RESMGR_FLAG_FTYPE_ONLY: u32 = 0x8;
+pub const _RESMGR_FLAG_DIR: u32 = 0x100;
+pub const _RESMGR_FLAG_FTYPE_ONLY: u32 = 0x8;
 
 pub const ACCESS_READ: u8 = 0x01;
 pub const ACCESS_WRITE: u8 = 0x02;
 pub const ACCESS_EXEC: u8 = 0x04;
 
-pub const S_IFDIR: u32 = 0x4000;
-pub const S_IFNAM: u32 = 0x5000;
-pub const S_IFREG: u32 = 0x8000;
-pub const S_INMQ: u32 = 0x3;
+pub const _S_IFDIR: u32 = 0x4000;
+pub const _S_IFNAM: u32 = 0x5000;
+pub const _S_IFREG: u32 = 0x8000;
+pub const _S_INMQ: u32 = 0x3;
 
 #[repr(C, packed)]
 #[derive(Default)]
