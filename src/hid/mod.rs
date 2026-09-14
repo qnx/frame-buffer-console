@@ -1,19 +1,19 @@
 /// Module for communicating with io-hid
 
 mod report;
-mod device;
+mod keyboard;
 mod cmd;
 mod input;
 
 use libc;
 use std::ffi::CStr;
 use std::thread::{self, JoinHandle};
-use std::sync::mpsc;
 use std::mem::MaybeUninit;
 
-use device::{Device, DeviceType};
+use keyboard::Keyboard;
 use report::Report;
 use input::InputReport;
+use crate::vga::Vga;
 
 const HID_VERSION: u16 = 0x100;
 const HIDD_VERSION: u16 = 0x100;
@@ -84,18 +84,22 @@ struct HidEvent {
 pub struct Hid {
     fd: i32,
     thandle: Option<JoinHandle<()>>,
-    key_receiver: mpsc::Receiver<Option<Key>>,
-    pressed_key: Option<Key>
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Key {
     pub chr: u8,
     pub modifier: u8
 }
 
-const NO_REPLY: Option<&mut i32> = None;
+#[derive(PartialEq, Debug)]
+pub enum DeviceType {
+    Keyboard,
+    Mouse,
+    Other
+}
 
+const NO_REPLY: Option<&mut i32> = None;
 
 /// Safe wrapper for libc::open()
 fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
@@ -111,7 +115,7 @@ fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
 }
 
 /// Thread used to poll io-hid for events.
-fn poll_thread(fd: i32, key_sender: mpsc::SyncSender<Option<Key>>) {
+fn poll_thread(fd: i32, mut vga: Vga) {
     // Construct a poll command.
     // Once a device is attached, the poll command message can return a report, so the reply needs
     // to include a Report structure.
@@ -123,7 +127,7 @@ fn poll_thread(fd: i32, key_sender: mpsc::SyncSender<Option<Key>>) {
         _pad2: [0, 0]
     };
 
-    let mut device: Option<Device> = None;
+    let mut device: Option<Keyboard> = None;
 
     loop {
         // Get an event.
@@ -136,14 +140,14 @@ fn poll_thread(fd: i32, key_sender: mpsc::SyncSender<Option<Key>>) {
         let event = unsafe { event.assume_init() };
         match event.event_type {
             HIDDI_EVT_INSERTION => device_inserted(&event, fd, &mut device),
-            HIDDI_EVT_HID_REPORT => report_received(&event, &device, &key_sender),
+            HIDDI_EVT_HID_REPORT => report_received(&event, &mut device, &mut vga),
             HIDDI_EVT_REMOVAL => println!("Device removed"),
             event_type => println!("Received event {event_type}")
         };
     }
 }
 
-fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
+fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Keyboard>) {
     // Do nothing if we already have a keyboard device.
     if device.is_some() {
         return;
@@ -204,11 +208,11 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Device>) {
         return;
     }
 
-    *device = Some(Device::new(device_number, report.input_report_len));
+    *device = Some(Keyboard::new(device_number, report.input_report_len));
 }
 
-fn report_received(event: &HidEvent, device: &Option<Device>,
-                   key_sender: &mpsc::SyncSender::<Option<Key>>) {
+fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
+                   vga: &mut Vga) {
     let device = match device {
         None => {
             println!("Report without a device");
@@ -235,11 +239,14 @@ fn report_received(event: &HidEvent, device: &Option<Device>,
         Err(()) => { return; }
     };
 
-    key_sender.send(input_report.as_key()).unwrap();
+    let key = input_report.as_key();
+    if let Some(key) = device.key_pressed(key) {
+        vga.insert_char_at_cursor(key.chr, 0x07, true);
+    }
 }
 
 impl Hid {
-    pub fn new() -> Result<Hid, i32> {
+    pub fn new(vga: &Vga) -> Result<Hid, i32> {
         // Open a connection to the server.
         let fd = open(c"/dev/io-hid/io-hid", libc::O_RDWR)?;
 
@@ -256,42 +263,10 @@ impl Hid {
         cmd::send(fd, cmd::CONNECT, &cmd, NO_REPLY)?;
 
         // Start the event polling thread.
-        let (key_sender, key_receiver) = mpsc::sync_channel(1);
-        let thandle = thread::spawn(move || { poll_thread(fd, key_sender); });
+        let vga = vga.clone();
+        let thandle = thread::spawn(move || { poll_thread(fd, vga); });
 
-        Ok(Hid { fd, thandle: Some(thandle), key_receiver, pressed_key: None })
-    }
-
-    /// Retrieve a new key press from io-hid.
-    pub fn get_key(&mut self) -> Key {
-        loop {
-            // Wait for the poll thread to produce a new key.
-            let key = match self.key_receiver.recv() {
-                Ok(key) => key,
-                _ => continue
-            };
-
-            // Determine if there was a change.
-            let prev_key = std::mem::replace(&mut self.pressed_key, key);
-            let new_key = self.pressed_key.clone();
-
-            match prev_key {
-                Some(pkey) => {
-                    // There is a already a pressed key, check for a change.
-                    match new_key {
-                        Some(key) => if key != pkey { return key; },
-                        None => {}
-                    }
-                },
-                None => {
-                    // No key was pressed before.
-                    match new_key {
-                        Some(key) => { return key; },
-                        None => {}
-                    }
-                }
-            }
-        }
+        Ok(Hid { fd, thandle: Some(thandle) })
     }
 }
 

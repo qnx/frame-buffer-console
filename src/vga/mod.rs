@@ -84,6 +84,10 @@ impl Vga {
         Ok(vga)
     }
 
+    pub fn clone(&self) -> Vga {
+        Vga { obj: self.obj.clone() }
+    }
+
     pub fn insert_char_at_cursor(&mut self, chr: u8, attr: u8, update_cursor: bool) {
         let mut screen = self.obj.screen.lock().unwrap();
         let (col, row) = (screen.cursor.col, screen.cursor.row);

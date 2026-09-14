@@ -8,7 +8,7 @@ pub struct InputReport {
 }
 
 impl InputReport {
-    pub fn new(event: &HidEvent, device: &Device) -> Result<InputReport, ()> {
+    pub fn new(event: &HidEvent, device: &Keyboard) -> Result<InputReport, ()> {
         // Extract the data.
         const HID_EVENT_SIZE: usize = size_of::<HidEvent>() - MAX_REPORT_LEN;
         let event_length = event.length as usize;

@@ -4,7 +4,7 @@
 // Incomplete. Need to determine exactly which items belong to the keyboard input that is of
 // interest. Right now the last input item will override previous ones, which may not be correct.
 
-use crate::hid::device::*;
+use crate::hid::DeviceType;
 
 /// Parsed report structure.
 /// The public fields carry the parsed information, which private fields hold global state used
