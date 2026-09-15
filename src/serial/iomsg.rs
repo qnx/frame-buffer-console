@@ -8,8 +8,6 @@ use crate::qnxmsg::transaction::Transaction;
 use crate::serial::{SerialServer, SerialSession};
 use crate::libc_missing;
 
-const DCMD_CHR_ISATTY: i32 = 0x318;
-
 impl IoMsgImpl for SerialServer {
     /// Handle an _IO_CONNECT message with the _IO_CONNECT_OPEN subtype.
     /// Prepares a new session.
@@ -101,22 +99,17 @@ impl IoMsgImpl for SerialServer {
     }
 
     /// Handle an _IO_DEVCTL message.
-    fn devctl(&mut self, msg: &DevctlMsg, trans: &mut Transaction)
+    fn devctl(&mut self, msg: &DevctlMsg, payload: &[u8], trans: &mut Transaction)
             -> Result<(), i32> {
         let _session = match self.session_table.get(trans.session_id()) {
             None => { return Err(libc::EBADF); },
             Some(_) => {}
         };
 
-        let dcmd = msg.dcmd;
-        let cmd = msg.dcmd & 0xff;
-        let class = (msg.dcmd & 0xff00) >> 8;
-        println!("devctl {:x} {} {}", dcmd, class, cmd);
-
-        match dcmd {
-            DCMD_CHR_ISATTY => trans.reply(0),
-            _ => trans.error(libc::ENOSYS)
-        }
+        match self.devctl(msg.dcmd, payload) {
+            Ok(_) => trans.reply(0),
+            Err(err) => trans.error(err)
+        };
 
         Ok(())
     }

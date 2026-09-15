@@ -13,7 +13,14 @@ where ServerT: IoMsgImpl
         Err(err) => { trans.error(err); return; }
     };
 
-    if let Err(err) = server.devctl(devctl_msg, trans) {
+    let payload_start = std::mem::size_of::<DevctlMsg>();
+    let payload_end = buf.get_length();
+    let payload = match buf.get_data(payload_start, payload_end) {
+        Ok(payload) => payload,
+        Err(err) => { trans.error(err); return; }
+    };
+
+    if let Err(err) = server.devctl(devctl_msg, &payload, trans) {
         trans.error(err);
     }
 }

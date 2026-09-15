@@ -1,4 +1,5 @@
 mod iomsg;
+mod devctl;
 
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
@@ -14,10 +15,16 @@ pub struct SerialSession {
 
 /// Main server structure.
 pub struct SerialServer {
+    /// Channel on which to receive messages.
     channel: Channel,
+    /// Table of connected client sessions.
     session_table: SessionTable<SerialSession>,
+    /// Display access structure.
     vga: Vga,
-    perms: FilePerms
+    /// POSIX IDs and file permissions for the device node.
+    perms: FilePerms,
+    /// Job control session ID.
+    sid: Option<i32>
 }
 
 impl SerialServer {
@@ -27,7 +34,8 @@ impl SerialServer {
             channel: Channel::new(0).unwrap(),
             session_table: SessionTable::<SerialSession>::new(),
             vga: vga.clone(),
-            perms: FilePerms::new(0, 0, 0o600)
+            perms: FilePerms::new(0, 0, 0o600),
+            sid: None
         };
 
         // Attach to the mount point.

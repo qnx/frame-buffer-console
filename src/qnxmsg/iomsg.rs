@@ -115,7 +115,7 @@ pub struct StatMsg {
 pub struct DevctlMsg {
     msg_type: u16,
     combine_len: u16,
-    pub dcmd: i32,
+    pub dcmd: u32,
     pub nbytes: u32,
     pub zero: u32
 }
@@ -184,7 +184,7 @@ pub trait IoMsgImpl {
         Err(libc::ENOSYS)
     }
 
-    fn devctl(&mut self, _msg: &DevctlMsg, _trans: &mut Transaction)
+    fn devctl(&mut self, _msg: &DevctlMsg, _payload: &[u8], _trans: &mut Transaction)
               -> Result<(), i32> {
         Err(libc::ENOSYS)
     }
