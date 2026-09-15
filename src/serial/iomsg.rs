@@ -7,6 +7,8 @@ use crate::qnxmsg::iomsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::serial::{SerialServer, SerialSession};
 
+const DCMD_CHR_ISATTY: i32 = 0x318;
+
 impl IoMsgImpl for SerialServer {
     /// Handle an _IO_CONNECT message with the _IO_CONNECT_OPEN subtype.
     /// Prepares a new session.
@@ -98,15 +100,24 @@ impl IoMsgImpl for SerialServer {
     }
 
     /// Handle an _IO_DEVCTL message.
-    fn devctl(&mut self, _msg: &DevctlMsg, trans: &mut Transaction)
+    fn devctl(&mut self, msg: &DevctlMsg, trans: &mut Transaction)
             -> Result<(), i32> {
         let _session = match self.session_table.get(trans.session_id()) {
             None => { return Err(libc::EBADF); },
             Some(_) => {}
         };
 
-        println!("devctl");
-        Err(libc::EINVAL)
+        let dcmd = msg.dcmd;
+        let cmd = msg.dcmd & 0xff;
+        let class = (msg.dcmd & 0xff00) >> 8;
+        println!("devctl {:x} {} {}", dcmd, class, cmd);
+
+        match dcmd {
+            DCMD_CHR_ISATTY => trans.reply(0),
+            _ => trans.error(libc::ENOSYS)
+        }
+
+        Ok(())
     }
 
     /// Handle an _IO_CLOSE message.
