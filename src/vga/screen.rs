@@ -4,10 +4,15 @@ use crate::vga::font::Font;
 use crate::vga::{Rect, ScreenChar, Cursor, CursorDir};
 
 pub struct Screen {
+    /// Screen contents (character and attrbitute for each position).
     pub buffer: Vec<ScreenChar>,
+    /// Horizontal size in characters.
     pub columns: u32,
+    /// Vertical size in characters.
     pub rows: u32,
+    /// Cursor position and shape.
     pub cursor: Cursor,
+    /// Region of updated contents.
     dirty: Rect
 }
 
@@ -157,5 +162,89 @@ impl Screen {
 
         self.cursor.col = col;
         self.cursor.row = row;
+    }
+
+    pub fn insert_at_cursor(&mut self, chrs: &str) {
+        // Mark starting position.
+        let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
+
+        // Insert characters.
+        for chr in chrs.bytes() {
+            match chr {
+                b'\n' => self.insert_newline(&mut insert),
+                _ => self.insert_char(chr, &mut insert)
+            }
+        }
+
+        // Update the dirty rectangle.
+        self.set_dirty(self.cursor.col, self.cursor.row, insert.len);
+
+        // Set new cursor position.
+        self.cursor.col = insert.col;
+        self.cursor.row = insert.row;
+
+        // FIXME:
+        // Scrolling.
+    }
+
+    fn insert_char(&mut self, chr: u8, insert: &mut Insert) {
+        // Update the buffer with the given character.
+        self.buffer[insert.bufidx] = ScreenChar { chr, attr: 0x07 };
+        insert.bufidx += 1;
+
+        // Move the position one to the right, wrapping as necessary.
+        insert.col += 1;
+        if insert.col == self.columns {
+            insert.col = 0;
+            insert.row += 1;
+            if insert.row == self.rows {
+                insert.scroll += 1;
+            }
+        }
+        insert.len += 1;
+    }
+
+    fn insert_newline(&mut self, insert: &mut Insert) {
+        // Fill the buffer with empty characters from the given position to the end of the row.
+        let mut len = 0;
+        for _ in insert.col..self.columns {
+            self.buffer[insert.bufidx] = BLANK_CHAR;
+            insert.bufidx += 1;
+            len += 1;
+        }
+
+        // Move to the next line.
+        insert.col = 0;
+        insert.row += 1;
+        if insert.row == self.rows {
+            insert.scroll += 1;
+        }
+        insert.len = len;
+    }
+}
+
+/// Tracks single- and multi-characters insertions into the screen's buffer.
+struct Insert {
+    /// Column for the next character.
+    col: u32,
+    /// Row for the next character.
+    row: u32,
+    /// Position in the screen buffer.
+    bufidx: usize,
+    /// Total number of characters inserted.
+    len: u32,
+    /// How many lines of scrolling are needed.
+    scroll: u32
+}
+
+impl Insert {
+    pub fn new(screen: &Screen, col: u32, row: u32) -> Self {
+        Insert {
+            col,
+            row,
+            bufidx: (row * screen.columns + col) as usize,
+            len: 0,
+            scroll: 0
+        }
     }
 }

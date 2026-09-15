@@ -105,6 +105,12 @@ impl Vga {
             self.obj.cond.notify_one();
         }
     }
+
+    pub fn insert_at_cursor(&mut self, chrs: &str) {
+        let mut screen = self.obj.screen.lock().unwrap();
+        screen.insert_at_cursor(chrs);
+        self.obj.cond.notify_one();
+    }
 }
 
 fn screen_update_thread(vga: Arc<VgaObj>) {

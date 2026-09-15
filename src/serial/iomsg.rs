@@ -37,10 +37,7 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EACCES);
         }
 
-        for chr in data.bytes() {
-            self.vga.insert_char_at_cursor(chr, 0x17, true);
-        }
-
+        self.vga.insert_at_cursor(data);
         trans.reply(data.len() as i64);
         Ok(())
     }
