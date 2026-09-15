@@ -13,10 +13,13 @@ impl IoMsgImpl for SerialServer {
     fn connect(&mut self, msg: &ConnectMsg, _path: &str,
                _extra: &ConnectExtra, trans: &mut Transaction)
                -> Result<(), i32> {
-        // Add a new session to the table.
-        // FIXME:
-        // Check permissions.
+        // Check that the client is allowed to connect.
         let access = (msg.ioflag & 0x7) as u8;
+        if !trans.check_credentials(&self.perms, access) {
+            return Err(libc::EPERM);
+        }
+
+        // Add a new session to the table.
         let session = SerialSession { access };
         let session = Rc::new(RefCell::new(session));
         self.session_table.add(trans.session_id(), &session);
@@ -54,9 +57,9 @@ impl IoMsgImpl for SerialServer {
             st_size: 0,
             st_dev: 0,
             st_rdev: libc::S_IFCHR,
-            st_uid: 0,
-            st_gid: 0,
-            st_mode: 0o666,
+            st_uid: self.perms.uid,
+            st_gid: self.perms.gid,
+            st_mode: self.perms.get_mode(),
             st_nlink: 0,
             st_blocksize: 0,
             st_nblocks: 0,

@@ -16,7 +16,8 @@ pub struct SerialSession {
 pub struct SerialServer {
     channel: Channel,
     session_table: SessionTable<SerialSession>,
-    vga: Vga
+    vga: Vga,
+    perms: FilePerms
 }
 
 impl SerialServer {
@@ -25,7 +26,8 @@ impl SerialServer {
         let server = SerialServer {
             channel: Channel::new(0).unwrap(),
             session_table: SessionTable::<SerialSession>::new(),
-            vga: vga.clone()
+            vga: vga.clone(),
+            perms: FilePerms::new(0, 0, 0o600)
         };
 
         // Attach to the mount point.

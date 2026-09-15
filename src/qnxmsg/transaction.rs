@@ -140,9 +140,9 @@ impl Transaction {
     pub fn get_credentials(&self) -> Result<libc::_cred_info, i32> {
         // FIXME:
         // Get all supplementary groups?
-        let info = MaybeUninit::<libc::_client_info>::uninit();
+        let mut info = MaybeUninit::<libc::_client_info>::uninit();
         let err = unsafe {
-            let info_ptr = std::ptr::addr_of!(info) as *mut libc::_client_info;
+            let info_ptr = info.as_mut_ptr() as *mut libc::_client_info;
             libc::ConnectClientInfo_r(self.info.scoid, info_ptr, 8)
         };
 
