@@ -2,6 +2,7 @@ mod hid;
 mod vga;
 mod qnxmsg;
 mod serial;
+mod libc_missing;
 
 use hid::Hid;
 use vga::Vga;

@@ -1,6 +1,6 @@
 /// Access to the UEFI frame buffer
 
-use crate::vga::libc_missing;
+use crate::libc_missing;
 
 #[derive(Debug)]
 pub struct FrameBuffer {

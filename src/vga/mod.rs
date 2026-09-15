@@ -2,7 +2,6 @@ mod framebuffer;
 mod screen;
 mod font;
 mod cursor;
-mod libc_missing;
 
 use framebuffer::FrameBuffer;
 use screen::Screen;
