@@ -7,6 +7,7 @@ pub mod connect;
 pub mod devctl;
 pub mod dup;
 pub mod msg;
+pub mod openfd;
 pub mod read;
 pub mod stat;
 pub mod write;
@@ -41,6 +42,7 @@ pub const _IO_READ: u16 = 0x101;
 pub const _IO_WRITE: u16 = 0x102;
 pub const _IO_STAT: u16 = 0x104;
 pub const _IO_DEVCTL: u16 = 0x106;
+pub const _IO_OPENFD: u16 = 0x10d;
 pub const _IO_MSG: u16 = 0x113;
 pub const _IO_DUP: u16 = 0x115;
 pub const _IO_CLOSE: u16 = 0x116;
@@ -142,6 +144,18 @@ pub struct MsgMsg {
     pub subtype: u16
 }
 
+#[repr(C, packed)]
+#[derive(Debug)]
+pub struct OpenfdMsg {
+    msg_type: u16,
+    combine_len: u16,
+    pub ioflag: u32,
+    pub sflag: u16,
+    pub xtype: u16,
+    pub info: libc_missing::_msg_info_hdr,
+    pub handle: u64
+}
+
 /// Trait for I/O messages delivered to the server.
 pub trait IoMsgImpl {
     fn connect(&mut self, _msg: &ConnectMsg, _path: &str,
@@ -181,6 +195,11 @@ pub trait IoMsgImpl {
     }
 
     fn msg(&mut self, _msg: &MsgMsg, _payload: &[u8], _trans: &mut Transaction)
+           -> Result<(), i32> {
+        Err(libc::ENOSYS)
+    }
+
+    fn openfd(&mut self, _msg: &OpenfdMsg, _trans: &mut Transaction)
            -> Result<(), i32> {
         Err(libc::ENOSYS)
     }

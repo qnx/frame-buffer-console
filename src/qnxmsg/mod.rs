@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use libc;
+use crate::libc_missing;
 
 pub mod mount;
 pub mod node;
@@ -25,8 +26,7 @@ pub const S_IFREG: u32 = 0x8000;
 pub const S_INMQ: u32 = 0x3;
 
 #[repr(C, packed)]
-#[derive(Default)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MsgInfo {
     nd: u32,
     srcnd: u32,

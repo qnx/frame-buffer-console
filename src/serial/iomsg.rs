@@ -6,6 +6,7 @@ use crate::qnxmsg;
 use crate::qnxmsg::iomsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::serial::{SerialServer, SerialSession};
+use crate::libc_missing;
 
 const DCMD_CHR_ISATTY: i32 = 0x318;
 
@@ -119,6 +120,57 @@ impl IoMsgImpl for SerialServer {
 
         Ok(())
     }
+
+    /// Handle an _IO_OPENFD message.
+    /// An openfd() call is a request to make the file descriptor on which the message was sent a
+    /// duplicate of another file descriptor, potentially from another process, identified by the
+    /// message's info field. A dup handle is used to verify that the requesting process was
+    /// granted access to the original descriptor.
+    fn openfd(&mut self, msg: &OpenfdMsg, trans: &mut Transaction)
+              -> Result<(), i32> {
+        // Current fd should not be associated with a session (i.e., should not have been opened
+        // previously).
+        if self.session_table.get(trans.session_id()).is_some() {
+            return Err(libc::EBUSY);
+        };
+
+        // Check permissions.
+        let dstpid = trans.info.pid64();
+        let handle = msg.handle;
+        if handle != 0 {
+            // Check for a valid dup handle.
+            let handle = msg.handle;
+            let err = unsafe {
+                libc_missing::ConnectDupFd_r(libc_missing::_NTO_DUPFD_VERIFY,
+                                             &dstpid as *const i64,
+                                             &handle as *const u64,
+                                             std::ptr::null_mut(),
+                                             &msg.info as *const libc_missing::_msg_info_hdr)
+            };
+
+            if err != 0 {
+                return Err(err);
+            }
+        } else if dstpid == 1 {
+            // Procnto sends a message without a dup handle when handling tcsetsid().
+        } else {
+            return Err(libc::EPERM);
+        }
+
+        // Check that the client is allowed to connect.
+        let access = (msg.ioflag & 0x7) as u8;
+        if !trans.check_credentials(&self.perms, access) {
+            return Err(libc::EPERM);
+        }
+
+        // Add a new session to the table.
+        let session = SerialSession { access };
+        let session = Rc::new(RefCell::new(session));
+        self.session_table.add(trans.session_id(), &session);
+        trans.reply(0);
+        Ok(())
+    }
+
 
     /// Handle an _IO_CLOSE message.
     fn close(&mut self, trans: &Transaction) -> Result<(), i32> {
