@@ -26,7 +26,7 @@ pub const S_IFREG: u32 = 0x8000;
 pub const S_INMQ: u32 = 0x3;
 
 #[repr(C, packed)]
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct MsgInfo {
     nd: u32,
     srcnd: u32,

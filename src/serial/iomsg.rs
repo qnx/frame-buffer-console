@@ -43,6 +43,50 @@ impl IoMsgImpl for SerialServer {
 
         self.vga.insert_at_cursor(data);
         trans.reply(data.len() as i64);
+
+        if let Some(read_trans) = &mut self.read {
+            read_trans.reply_with_payload_and_size(data.len() as i64, data, data.len());
+            self.read = None;
+        }
+
+        Ok(())
+    }
+
+    /// Handle an _IO_READ message.
+    fn read(&mut self, msg: &ReadMsg, trans: &mut Transaction)
+            -> Result<(), i32> {
+        let session = match self.session_table.get(trans.session_id()) {
+            None => { return Err(libc::EBADF); },
+            Some(s) => s
+        };
+
+        // Check for read permission.
+        let session = session.borrow();
+        if (session.access & qnxmsg::ACCESS_READ) == 0 {
+            return Err(libc::EACCES);
+        }
+
+        // Ensure that the reader is from the foreground process group.
+        let info = trans.get_client_info()?;
+        if !self.sid_match(info.sid) {
+            return Err(libc::ENOTTY);
+        }
+
+        // FIXME:
+        // Send SIGTTIN?
+        if (info.flags & libc::_NTO_CI_BKGND_PGRP) != 0 {
+            return Err(libc::ENOTTY);
+        }
+
+        if self.read.is_some() {
+            // FIXME:
+            // Can there be more than one client request reading at the same time?
+            return Err(libc::EBUSY);
+        }
+
+        self.read = Some(trans.reply_later());
+        let nbytes = msg.nbytes;
+        println!("read: {}", nbytes);
         Ok(())
     }
 

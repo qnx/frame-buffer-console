@@ -4,6 +4,7 @@ mod devctl;
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
 use crate::qnxmsg::session::SessionTable;
+use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::vga::Vga;
@@ -19,7 +20,9 @@ pub struct SerialServer {
     /// POSIX IDs and file permissions for the device node.
     perms: FilePerms,
     /// Job control data.
-    job: Option<JobControl>
+    job: Option<JobControl>,
+    /// Read transaction waiting for a reply.
+    read: Option<Transaction>
 }
 
 /// Information for an open session.
@@ -49,7 +52,8 @@ impl SerialServer {
             session_table: SessionTable::<SerialSession>::new(),
             vga: vga.clone(),
             perms: FilePerms::new(0, 0, 0o666),
-            job: None
+            job: None,
+            read: None
         };
 
         // Attach to the mount point.

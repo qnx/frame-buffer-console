@@ -188,4 +188,18 @@ impl Transaction {
     pub fn session_id(&self) -> (i64, i32) {
         (self.info.pid64(), self.info.coid)
     }
+
+    pub fn reply_later(&mut self) -> Transaction {
+        // Mark the existing transaction to prevent replies.
+        self.state = State::Error;
+
+        // Create a copy of the transaction object.
+        Transaction {
+            rcvid: self.rcvid,
+            state: State::Pending,
+            combine_offset: 0,
+            auto_close: false,
+            info: self.info
+        }
+    }
 }

@@ -13,10 +13,8 @@ fn main() {
     let _hid = Hid::new(&vga).unwrap();
     let mut server = SerialServer::new(&vga);
 
-    let msg = "Welcome to UEFI console!";
-    for chr in msg.as_bytes() {
-        vga.insert_char_at_cursor(*chr, 0x07, true);
-    }
+    let msg = "Welcome to UEFI console!\n";
+    vga.insert_at_cursor(msg);
 
     server.message_loop();
 }
