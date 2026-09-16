@@ -8,6 +8,7 @@ const DCMD_CHR_ISATTY: u32 = 0x318;
 const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
 const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
 const DCMD_CHR_TCGETATTR : u32 = 0x404c7413;
+const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
 
 const EDIT_CFLAG: u32 = libc::CREAD | libc::CS8 | libc::HUPCL | libc::CLOCAL;
 const EDIT_IFLAG: u32 = libc::IMAXBEL | libc::INPCK | libc::BRKINT | libc::ICRNL | libc::IXON |
@@ -26,6 +27,12 @@ struct TcgetprpReply {
 struct TcgetattrReply {
     hdr: DevctlReply,
     attr: libc::termios
+}
+
+#[repr(C, packed)]
+struct TcgetsizeReply {
+    hdr: DevctlReply,
+    size: libc::winsize
 }
 
 /// Safely convert an array of bytes in a message's payload to a structured
@@ -55,6 +62,7 @@ impl SerialServer {
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
             DCMD_CHR_TCGETPGRP => self.tcgetpgrp(trans),
             DCMD_CHR_TCGETATTR => self.tcgetattr(trans),
+            DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
         }
     }
@@ -151,6 +159,27 @@ impl SerialServer {
                 zero2: 0
             },
             attr
+        };
+        trans.reply_with_payload(0, &reply); Ok(())
+    }
+
+    /// Get screen size.
+    fn tcgetsize(&mut self, trans: &mut Transaction) -> Result<(), i32> {
+        let (columns, rows) = self.vga.screen_size();
+        let (width, height) = self.vga.framebuffer_size();
+        let reply = TcgetsizeReply {
+            hdr: DevctlReply {
+                zero: 0,
+                ret_val: 0,
+                nbytes: size_of::<libc::termios>() as u32,
+                zero2: 0
+            },
+            size: libc::winsize {
+                ws_col: columns as u16,
+                ws_row: rows as u16,
+                ws_xpixel: width as u16,
+                ws_ypixel: height as u16,
+            }
         };
         trans.reply_with_payload(0, &reply); Ok(())
     }

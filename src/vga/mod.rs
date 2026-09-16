@@ -110,6 +110,15 @@ impl Vga {
         screen.insert_at_cursor(chrs);
         self.obj.cond.notify_one();
     }
+
+    pub fn screen_size(&self) -> (u32, u32) {
+        let screen = self.obj.screen.lock().unwrap();
+        (screen.columns, screen.rows)
+    }
+
+    pub fn framebuffer_size(&self) -> (u32, u32) {
+        (self.obj.framebuffer.width, self.obj.framebuffer.height)
+    }
 }
 
 fn screen_update_thread(vga: Arc<VgaObj>) {
