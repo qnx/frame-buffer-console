@@ -1,8 +1,10 @@
 use crate::serial::SerialServer;
+use crate::qnxmsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::iomsg::DevctlReply;
 use crate::libc_missing;
 
+const DCMD_ALL_GETFLAGS: u32 = 0x40040101;
 const DCMD_CHR_TCSETSID: u32 = 0x80040308;
 const DCMD_CHR_ISATTY: u32 = 0x318;
 const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
@@ -16,6 +18,12 @@ const EDIT_IFLAG: u32 = libc::IMAXBEL | libc::INPCK | libc::BRKINT | libc::ICRNL
 const EDIT_LFLAG: u32 = libc::ECHO | libc::ECHOCTL | libc::ECHOE | libc::ECHOK | libc::ECHONL |
                         libc::ECHOKE | libc::ICANON | libc::ISIG | libc::IEXTEN;
 const EDIT_OFLAG: u32 = libc::ONLCR | libc::OPOST;
+
+#[repr(C, packed)]
+struct GetflagsReply {
+    hdr: DevctlReply,
+    oflag: i32
+}
 
 #[repr(C, packed)]
 struct TcgetprpReply {
@@ -33,6 +41,17 @@ struct TcgetattrReply {
 struct TcgetsizeReply {
     hdr: DevctlReply,
     size: libc::winsize
+}
+
+impl DevctlReply {
+    fn new<T>(ret_val: i32) -> Self {
+        DevctlReply {
+            zero: 0,
+            ret_val,
+            nbytes: size_of::<T>() as u32,
+            zero2: 0
+        }
+    }
 }
 
 /// Safely convert an array of bytes in a message's payload to a structured
@@ -54,9 +73,25 @@ fn transmute_payload<T>(payload: &[u8]) -> Result<&T, ()> {
 
 impl SerialServer {
     /// Top-level devctl dispatcher.
-    pub fn devctl(&mut self, dcmd: u32, payload: &[u8], trans: &mut Transaction) ->
-        Result<(), i32> {
+    pub fn devctl(&mut self, dcmd: u32, payload: &[u8], access: u8,
+                  trans: &mut Transaction) -> Result<(), i32> {
+        let req_access = match dcmd {
+            DCMD_ALL_GETFLAGS => ACCESS_READ,
+            DCMD_CHR_ISATTY => ACCESS_READ,
+            DCMD_CHR_TCSETSID => ACCESS_WRITE,
+            DCMD_CHR_TCSETPGRP => ACCESS_WRITE,
+            DCMD_CHR_TCGETPGRP => ACCESS_READ,
+            DCMD_CHR_TCGETATTR => ACCESS_READ,
+            DCMD_CHR_TCGETSIZE => ACCESS_READ,
+            _ => ACCESS_WRITE
+        };
+
+        if (req_access & access) == 0 {
+            return Err(libc::EPERM);
+        }
+
         match dcmd {
+            DCMD_ALL_GETFLAGS => self.getflags(access, trans),
             DCMD_CHR_ISATTY => { trans.reply(0); Ok(()) },
             DCMD_CHR_TCSETSID => self.tcsetsid(payload, trans),
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
@@ -65,6 +100,27 @@ impl SerialServer {
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
         }
+    }
+
+    /// Get file descripor I/O flags.
+    fn getflags(&mut self, access: u8, trans: &mut Transaction) -> Result<(), i32> {
+        let oflag = {
+            if access == ACCESS_READ {
+                libc::O_RDONLY
+            } else if access == ACCESS_WRITE {
+                libc::O_WRONLY
+            } else if access == ACCESS_READ | ACCESS_WRITE {
+                libc::O_RDWR
+            } else {
+                0
+            }
+        };
+
+        let reply = GetflagsReply {
+            hdr: DevctlReply::new::<i32>(0),
+            oflag
+        };
+        trans.reply_with_payload(0, &reply); Ok(())
     }
 
     /// Set the session ID for the controlling terminal.
@@ -126,12 +182,7 @@ impl SerialServer {
         match self.fpgid {
             Some(pgid) => {
                 let reply = TcgetprpReply {
-                    hdr: DevctlReply {
-                        zero: 0,
-                        ret_val: 0,
-                        nbytes: size_of::<i32>() as u32,
-                        zero2: 0
-                    },
+                    hdr: DevctlReply::new::<i32>(0),
                     pgid
                 };
                 trans.reply_with_payload(0, &reply); Ok(())
@@ -152,12 +203,7 @@ impl SerialServer {
         attr.c_ospeed = 100000;
 
         let reply = TcgetattrReply {
-            hdr: DevctlReply {
-                zero: 0,
-                ret_val: 0,
-                nbytes: size_of::<libc::termios>() as u32,
-                zero2: 0
-            },
+            hdr: DevctlReply::new::<libc::termios>(0),
             attr
         };
         trans.reply_with_payload(0, &reply); Ok(())
@@ -168,12 +214,7 @@ impl SerialServer {
         let (columns, rows) = self.vga.screen_size();
         let (width, height) = self.vga.framebuffer_size();
         let reply = TcgetsizeReply {
-            hdr: DevctlReply {
-                zero: 0,
-                ret_val: 0,
-                nbytes: size_of::<libc::termios>() as u32,
-                zero2: 0
-            },
+            hdr: DevctlReply::new::<libc::winsize>(0),
             size: libc::winsize {
                 ws_col: columns as u16,
                 ws_row: rows as u16,

@@ -101,12 +101,13 @@ impl IoMsgImpl for SerialServer {
     /// Handle an _IO_DEVCTL message.
     fn devctl(&mut self, msg: &DevctlMsg, payload: &[u8], trans: &mut Transaction)
             -> Result<(), i32> {
-        let _session = match self.session_table.get(trans.session_id()) {
+        let session = match self.session_table.get(trans.session_id()) {
             None => { return Err(libc::EBADF); },
-            Some(_) => {}
+            Some(s) => s
         };
 
-        self.devctl(msg.dcmd, payload, trans)
+        let access = session.borrow().access;
+        self.devctl(msg.dcmd, payload, access, trans)
     }
 
     /// Handle an _IO_OPENFD message.
