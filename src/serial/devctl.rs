@@ -7,11 +7,25 @@ const DCMD_CHR_TCSETSID: u32 = 0x80040308;
 const DCMD_CHR_ISATTY: u32 = 0x318;
 const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
 const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
+const DCMD_CHR_TCGETATTR : u32 = 0x404c7413;
+
+const EDIT_CFLAG: u32 = libc::CREAD | libc::CS8 | libc::HUPCL | libc::CLOCAL;
+const EDIT_IFLAG: u32 = libc::IMAXBEL | libc::INPCK | libc::BRKINT | libc::ICRNL | libc::IXON |
+                        libc::IXOFF;
+const EDIT_LFLAG: u32 = libc::ECHO | libc::ECHOCTL | libc::ECHOE | libc::ECHOK | libc::ECHONL |
+                        libc::ECHOKE | libc::ICANON | libc::ISIG | libc::IEXTEN;
+const EDIT_OFLAG: u32 = libc::ONLCR | libc::OPOST;
 
 #[repr(C, packed)]
 struct TcgetprpReply {
     hdr: DevctlReply,
     pgid: i32
+}
+
+#[repr(C, packed)]
+struct TcgetattrReply {
+    hdr: DevctlReply,
+    attr: libc::termios
 }
 
 /// Safely convert an array of bytes in a message's payload to a structured
@@ -40,6 +54,7 @@ impl SerialServer {
             DCMD_CHR_TCSETSID => self.tcsetsid(payload, trans),
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
             DCMD_CHR_TCGETPGRP => self.tcgetpgrp(trans),
+            DCMD_CHR_TCGETATTR => self.tcgetattr(trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
         }
     }
@@ -115,6 +130,29 @@ impl SerialServer {
             },
             None => Err(libc::ENOTTY)
         }
+    }
+
+    /// Get tarminal attributes.
+    fn tcgetattr(&mut self, trans: &mut Transaction) -> Result<(), i32> {
+        // These values are based on those provided by devc-con-hid.
+        let mut attr: libc::termios = unsafe { std::mem::zeroed() };
+        attr.c_iflag = EDIT_IFLAG;
+        attr.c_oflag = EDIT_OFLAG;
+        attr.c_cflag = EDIT_CFLAG;
+        attr.c_lflag = EDIT_LFLAG;
+        attr.c_ispeed = 100000;
+        attr.c_ospeed = 100000;
+
+        let reply = TcgetattrReply {
+            hdr: DevctlReply {
+                zero: 0,
+                ret_val: 0,
+                nbytes: size_of::<libc::termios>() as u32,
+                zero2: 0
+            },
+            attr
+        };
+        trans.reply_with_payload(0, &reply); Ok(())
     }
 }
 
