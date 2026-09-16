@@ -8,6 +8,7 @@ pub mod devctl;
 pub mod dup;
 pub mod msg;
 pub mod openfd;
+pub mod notify;
 pub mod read;
 pub mod stat;
 pub mod write;
@@ -41,6 +42,7 @@ pub const _IO_CONNECT_EXTRA_LINK: u8 = 13;
 pub const _IO_READ: u16 = 0x101;
 pub const _IO_WRITE: u16 = 0x102;
 pub const _IO_STAT: u16 = 0x104;
+pub const _IO_NOTIFY: u16 = 0x105;
 pub const _IO_DEVCTL: u16 = 0x106;
 pub const _IO_OPENFD: u16 = 0x10d;
 pub const _IO_MSG: u16 = 0x113;
@@ -165,6 +167,22 @@ pub struct OpenfdMsg {
     pub handle: u64
 }
 
+#[repr(C, packed)]
+pub struct NotifyMsg {
+    msg_type: u16,
+    combine_len: u16,
+    pub action: u32,
+    pub flags: u32,
+    pub event: libc::sigevent,
+    pub mgr: [i32; 2],
+    pub flags_extra_mask: u32,
+    pub flags_exten: u32,
+    pub nfds: i32,
+    pub fd_first: i32,
+    pub nfds_ready: i32,
+    pub timo: i64
+}
+
 /// Trait for I/O messages delivered to the server.
 pub trait IoMsgImpl {
     fn connect(&mut self, _msg: &ConnectMsg, _path: &str,
@@ -209,6 +227,11 @@ pub trait IoMsgImpl {
     }
 
     fn openfd(&mut self, _msg: &OpenfdMsg, _trans: &mut Transaction)
+           -> Result<(), i32> {
+        Err(libc::ENOSYS)
+    }
+
+    fn notify(&mut self, _msg: &NotifyMsg, _payload: &[u8], _trans: &mut Transaction)
            -> Result<(), i32> {
         Err(libc::ENOSYS)
     }

@@ -7,6 +7,7 @@ use crate::qnxmsg::iomsg::connect::*;
 use crate::qnxmsg::iomsg::devctl::*;
 use crate::qnxmsg::iomsg::dup::*;
 use crate::qnxmsg::iomsg::msg::*;
+use crate::qnxmsg::iomsg::notify::*;
 use crate::qnxmsg::iomsg::openfd::*;
 use crate::qnxmsg::iomsg::read::*;
 use crate::qnxmsg::iomsg::stat::*;
@@ -54,6 +55,7 @@ where ServerT: IoMsgImpl
             _IO_READ => read(server, buf, &mut trans),
             _IO_WRITE => write(server, buf, &mut trans),
             _IO_STAT => stat(server, buf, &mut trans),
+            _IO_NOTIFY => notify(server, buf, &mut trans),
             _IO_DEVCTL => devctl(server, buf, &mut trans),
             _IO_OPENFD => openfd(server, buf, &mut trans),
             _IO_MSG => msg(server, buf, &mut trans),

@@ -160,6 +160,12 @@ impl IoMsgImpl for SerialServer {
         Ok(())
     }
 
+    /// Handle an _IO_NOTIFY message.
+    fn notify(&mut self, _msg: &NotifyMsg, _payload: &[u8], trans: &mut Transaction)
+              -> Result<(), i32> {
+        trans.reply(0);
+        Ok(())
+    }
 
     /// Handle an _IO_CLOSE message.
     fn close(&mut self, trans: &Transaction) -> Result<(), i32> {
