@@ -24,7 +24,9 @@ pub struct SerialServer {
     /// POSIX IDs and file permissions for the device node.
     perms: FilePerms,
     /// Job control session ID.
-    sid: Option<i32>
+    sid: Option<i32>,
+    /// Job control foreground process group.
+    fpgid: Option<i32>
 }
 
 impl SerialServer {
@@ -35,7 +37,8 @@ impl SerialServer {
             session_table: SessionTable::<SerialSession>::new(),
             vga: vga.clone(),
             perms: FilePerms::new(0, 0, 0o600),
-            sid: None
+            sid: None,
+            fpgid: None
         };
 
         // Attach to the mount point.

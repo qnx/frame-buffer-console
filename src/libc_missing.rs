@@ -6,7 +6,7 @@ pub const HWI_NULL_OFF: u16 = 0xffff;
 pub const PROT_NOCACHE: libc::c_int = 0x0000_0800;
 pub const MAP_PHYS: libc::c_int = 0x0001_0000;
 pub const _NTO_DUPFD_VERIFY: libc::c_int = 5;
-
+pub const PROCMGR_SESSION_SETPGRP: u32 = 2;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -27,4 +27,7 @@ unsafe extern "C" {
 
     pub fn ConnectDupFd_r(op: libc::c_int, dstpid: *const i64, handle: *const u64, srvpid: *mut i32,
                           info: *const _msg_info_hdr) -> i32;
+
+    pub fn procmgr_session_ext(reserved: u32, sid: libc::pid_t, xid: i32, id: i32, event: u32) ->
+        i32;
 }

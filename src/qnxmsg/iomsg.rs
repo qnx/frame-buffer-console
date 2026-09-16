@@ -122,6 +122,15 @@ pub struct DevctlMsg {
 
 #[repr(C, packed)]
 #[derive(Debug)]
+pub struct DevctlReply {
+    pub zero: u32,
+    pub ret_val: i32,
+    pub nbytes: u32,
+    pub zero2: i32
+}
+
+#[repr(C, packed)]
+#[derive(Debug)]
 pub struct DupMsg {
     msg_type: u16,
     combine_len: u16,

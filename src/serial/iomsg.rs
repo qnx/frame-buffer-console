@@ -106,12 +106,7 @@ impl IoMsgImpl for SerialServer {
             Some(_) => {}
         };
 
-        match self.devctl(msg.dcmd, payload) {
-            Ok(_) => trans.reply(0),
-            Err(err) => trans.error(err)
-        };
-
-        Ok(())
+        self.devctl(msg.dcmd, payload, trans)
     }
 
     /// Handle an _IO_OPENFD message.

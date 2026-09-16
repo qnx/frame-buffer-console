@@ -137,7 +137,7 @@ impl Transaction {
     }
 
     /// Get the client's user and group IDs.
-    pub fn get_credentials(&self) -> Result<libc::_cred_info, i32> {
+    pub fn get_client_info(&self) -> Result<libc::_client_info, i32> {
         // FIXME:
         // Get all supplementary groups?
         let mut info = MaybeUninit::<libc::_client_info>::uninit();
@@ -150,27 +150,27 @@ impl Transaction {
             return Err(-err);
         }
 
-        let cred = unsafe { info.assume_init().cred };
-        Ok(cred)
+        let info = unsafe { info.assume_init() };
+        Ok(info)
     }
 
     /// Perform permission checks on the client's credentials.
     pub fn check_credentials(&self, perms: &FilePerms,
                              req_access: u8) -> bool {
         // Get client credentials.
-        let cred = match self.get_credentials() {
+        let info = match self.get_client_info() {
             Err(_err) => { return false; },
             Ok(cred) => cred
         };
 
-        if (perms.uid == cred.ruid) || (perms.uid == cred.euid) {
+        if (perms.uid == info.cred.ruid) || (perms.uid == info.cred.euid) {
             // Check by user permissions.
             if (perms.user_access & req_access) == req_access {
                 return true;
             }
         }
 
-        if (perms.gid == cred.rgid) || (perms.gid == cred.egid) {
+        if (perms.gid == info.cred.rgid) || (perms.gid == info.cred.egid) {
             // Check by group permissions.
             if (perms.group_access & req_access) == req_access {
                 return true;
