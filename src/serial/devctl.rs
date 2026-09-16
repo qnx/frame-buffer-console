@@ -10,6 +10,7 @@ const DCMD_CHR_ISATTY: u32 = 0x318;
 const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
 const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
 const DCMD_CHR_TCGETATTR : u32 = 0x404c7413;
+const DCMD_CHR_TCSETATTRD : u32 = 0x804c7415;
 const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
 const DCMD_CHR_TCSETSIZE : u32 = 0x80087467;
 
@@ -83,6 +84,7 @@ impl SerialServer {
             DCMD_CHR_TCSETPGRP => ACCESS_WRITE,
             DCMD_CHR_TCGETPGRP => ACCESS_READ,
             DCMD_CHR_TCGETATTR => ACCESS_READ,
+            DCMD_CHR_TCSETATTRD => ACCESS_WRITE,
             DCMD_CHR_TCGETSIZE => ACCESS_READ,
             DCMD_CHR_TCSETSIZE => ACCESS_WRITE,
             _ => ACCESS_WRITE
@@ -99,6 +101,7 @@ impl SerialServer {
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
             DCMD_CHR_TCGETPGRP => self.tcgetpgrp(trans),
             DCMD_CHR_TCGETATTR => self.tcgetattr(trans),
+            DCMD_CHR_TCSETATTRD => self.tcsetattr(payload, trans),
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             DCMD_CHR_TCSETSIZE => self.tcsetsize(payload, trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
@@ -210,6 +213,26 @@ impl SerialServer {
             attr
         };
         trans.reply_with_payload(0, &reply); Ok(())
+    }
+
+    /// Set treminal attributes.
+    fn tcsetattr(&mut self, payload: &[u8], trans: &mut Transaction) -> Result<(), i32> {
+        // Make sure the caller is in the session associated with this device.
+        let sid = trans.get_client_info()?.sid;
+        if Some(sid) != self.sid {
+            return Err(libc::ENOTTY);
+        }
+
+        let _attr = match transmute_payload::<libc::termios>(payload) {
+            Ok(attr) => attr,
+            Err(_) => { return Err(libc::EBADMSG); }
+        };
+
+        // FIXME:
+        // Apply attributes.
+
+        trans.reply(0);
+        Ok(())
     }
 
     /// Get screen size.
