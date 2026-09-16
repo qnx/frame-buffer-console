@@ -163,10 +163,20 @@ impl IoMsgImpl for SerialServer {
 
     /// Handle an _IO_CLOSE message.
     fn close(&mut self, trans: &Transaction) -> Result<(), i32> {
-        if self.session_table.remove(trans.session_id()).is_some() {
-            Ok(())
-        } else {
-            Err(libc::EBADF)
+        match self.session_table.remove(trans.session_id()) {
+            Some(_) => {
+                if let Some(job) = &mut self.job {
+                    // Determine if the close comes from the fd that registered the session.
+                    let (pid, coid) = trans.session_id();
+                    if (job.sess_fd_pid == pid) && (job.sess_fd_coid == coid) {
+                        // Session closed.
+                        println!("Session closed");
+                        self.job = None;
+                    }
+                }
+                Ok(())
+            },
+            None => Err(libc::EBADF)
         }
     }
 }

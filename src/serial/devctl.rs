@@ -1,4 +1,4 @@
-use crate::serial::SerialServer;
+use crate::serial::{SerialServer, JobControl};
 use crate::qnxmsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::iomsg::DevctlReply;
@@ -137,7 +137,7 @@ impl SerialServer {
             Err(_) => { return Err(libc::EBADMSG); }
         };
 
-        if self.sid.is_some() {
+        if self.job.is_some() {
             return Err(libc::EPERM);
         }
 
@@ -145,8 +145,8 @@ impl SerialServer {
         // Permissions.
 
         // Both the session ID and the foreground process group are set to the same ID.
-        self.sid = Some(sid);
-        self.fpgid = Some(sid);
+        let (sess_fd_pid, sess_fd_coid) = trans.session_id();
+        self.job = Some( JobControl { sid, fpgid: sid, sess_fd_pid, sess_fd_coid });
         println!("New session ID {sid}");
         trans.reply(0);
         Ok(())
@@ -161,7 +161,7 @@ impl SerialServer {
 
         // Make sure the caller is in the session associated with this device.
         let sid = trans.get_client_info()?.sid;
-        if Some(sid) != self.sid {
+        if !self.sid_match(sid) {
             return Err(libc::ENOTTY);
         }
 
@@ -171,7 +171,7 @@ impl SerialServer {
         // Let the process manager know about the new foreground group.
         procmgr_session_ext(sid, 0, pgid, libc_missing::PROCMGR_SESSION_SETPGRP)?;
 
-        self.fpgid = Some(pgid);
+        self.job.as_mut().unwrap().fpgid = pgid;
         println!("New foreground process groupd {pgid}");
         trans.reply(0);
         Ok(())
@@ -181,15 +181,15 @@ impl SerialServer {
     fn tcgetpgrp(&mut self, trans: &mut Transaction) -> Result<(), i32> {
         // Make sure the caller is in the session associated with this device.
         let sid = trans.get_client_info()?.sid;
-        if Some(sid) != self.sid {
+        if !self.sid_match(sid) {
             return Err(libc::ENOTTY);
         }
 
-        match self.fpgid {
-            Some(pgid) => {
+        match &self.job {
+            Some(job) => {
                 let reply = TcgetprpReply {
                     hdr: DevctlReply::new::<i32>(0),
-                    pgid
+                    pgid: job.fpgid
                 };
                 trans.reply_with_payload(0, &reply); Ok(())
             },
@@ -219,7 +219,7 @@ impl SerialServer {
     fn tcsetattr(&mut self, payload: &[u8], trans: &mut Transaction) -> Result<(), i32> {
         // Make sure the caller is in the session associated with this device.
         let sid = trans.get_client_info()?.sid;
-        if Some(sid) != self.sid {
+        if !self.sid_match(sid) {
             return Err(libc::ENOTTY);
         }
 
