@@ -11,6 +11,7 @@ const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
 const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
 const DCMD_CHR_TCGETATTR : u32 = 0x404c7413;
 const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
+const DCMD_CHR_TCSETSIZE : u32 = 0x80087467;
 
 const EDIT_CFLAG: u32 = libc::CREAD | libc::CS8 | libc::HUPCL | libc::CLOCAL;
 const EDIT_IFLAG: u32 = libc::IMAXBEL | libc::INPCK | libc::BRKINT | libc::ICRNL | libc::IXON |
@@ -83,6 +84,7 @@ impl SerialServer {
             DCMD_CHR_TCGETPGRP => ACCESS_READ,
             DCMD_CHR_TCGETATTR => ACCESS_READ,
             DCMD_CHR_TCGETSIZE => ACCESS_READ,
+            DCMD_CHR_TCSETSIZE => ACCESS_WRITE,
             _ => ACCESS_WRITE
         };
 
@@ -98,6 +100,7 @@ impl SerialServer {
             DCMD_CHR_TCGETPGRP => self.tcgetpgrp(trans),
             DCMD_CHR_TCGETATTR => self.tcgetattr(trans),
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
+            DCMD_CHR_TCSETSIZE => self.tcsetsize(payload, trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
         }
     }
@@ -223,6 +226,27 @@ impl SerialServer {
             }
         };
         trans.reply_with_payload(0, &reply); Ok(())
+    }
+
+    /// Set the window size.
+    fn tcsetsize(&mut self, payload: &[u8], trans: &mut Transaction) -> Result<(), i32> {
+        let winsize = match transmute_payload::<libc::winsize>(payload) {
+            Ok(winsize) => winsize,
+            Err(_) => { return Err(libc::EBADMSG); }
+        };
+
+        let (columns, rows) = self.vga.screen_size();
+        let (width, height) = self.vga.framebuffer_size();
+        if (columns != winsize.ws_col as u32) ||
+           (rows != winsize.ws_row as u32) ||
+           (width != winsize.ws_xpixel as u32) ||
+           (height != winsize.ws_ypixel as u32) {
+            // No support for changing anything at this point.
+            return Err(libc::ENOTSUP);
+        }
+
+        trans.reply(0);
+        Ok(())
     }
 }
 
