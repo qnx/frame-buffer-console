@@ -48,7 +48,7 @@ impl IoMsgImpl for SerialServer {
     }
 
     /// Handle an _IO_READ message.
-    fn read(&mut self, msg: &ReadMsg, trans: &mut Transaction)
+    fn read(&mut self, _msg: &ReadMsg, trans: &mut Transaction)
             -> Result<(), i32> {
         let session = match self.session_table.get(trans.session_id()) {
             None => { return Err(libc::EBADF); },
@@ -80,8 +80,6 @@ impl IoMsgImpl for SerialServer {
         }
 
         self.read = Some(trans.reply_later());
-        let nbytes = msg.nbytes;
-        println!("read: {}", nbytes);
         Ok(())
     }
 
@@ -225,8 +223,17 @@ impl IoMsgImpl for SerialServer {
         }
     }
 
+    /// Handle pulses.
     fn pulse(&mut self, pulse: &Pulse) {
         let (code, scoid) = (pulse.code, pulse.scoid);
-        println!("Received pulse {code} from {scoid}");
+        if scoid != 0 {
+            // Ignore external pulses.
+            return;
+        }
+
+        match code {
+            0 => self.key_event(pulse.value.sival_ptr as u8),
+            _ => { println!("Unhandled pulse {code}"); }
+        };
     }
 }

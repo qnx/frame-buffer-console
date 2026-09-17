@@ -82,4 +82,13 @@ impl SerialServer {
             None => false
         }
     }
+
+    /// Handle a key event from the HID polling thread.
+    /// If a client is waiting on a read request, the key is used in a reply to the client.
+    fn key_event(&mut self, key: u8) {
+        if let Some(trans) = &mut self.read {
+            trans.reply_with_payload(1, &key);
+            self.read = None;
+        }
+    }
 }
