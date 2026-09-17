@@ -30,6 +30,18 @@ impl Escape {
                  params: Vec::<u32>::new() }
     }
 
+    pub fn reset(&mut self) {
+        self.state = State::Init;
+        self.len = 0;
+        self.attr = None;
+        self.chr = Some(b'\\');
+        self.params.clear();
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.state != State::Init
+    }
+
     pub fn parse(&mut self, mut iter: Chars<'_>) {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
@@ -85,6 +97,7 @@ impl Escape {
 
             // Abort on a parse error.
             if self.state == State::Error {
+                self.len = 0;
                 break;
             }
 
@@ -109,9 +122,6 @@ impl Escape {
                 return;
             }
         }
-
-        // Parsing failed.
-        self.len = 0;
     }
 
     fn sgr_to_attr(&mut self) {

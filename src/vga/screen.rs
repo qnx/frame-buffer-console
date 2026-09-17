@@ -18,7 +18,9 @@ pub struct Screen {
     /// Default character attributes.
     default_attr: u8,
     /// Current attributes.
-    attr: u8
+    attr: u8,
+    /// Escape sequence parser.
+    esc: Escape
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
@@ -38,7 +40,8 @@ impl Screen {
             dirty: Rect { left: 0, top: 0, right: columns, bottom: rows },
             cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 },
             default_attr: 0x07,
-            attr: 0x07
+            attr: 0x07,
+            esc: Escape::new()
         };
 
         // Start with a clear screen.
@@ -119,9 +122,14 @@ impl Screen {
     pub fn insert_at_cursor(&mut self, chrs: &str) {
         // Mark starting position.
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
+        let mut iter = chrs.chars();
+
+        // Resume parsing an escape sequence from a previous call.
+        if self.esc.is_active() {
+            self.maybe_escape(&mut insert, &mut iter);
+        }
 
         // Insert characters.
-        let mut iter = chrs.chars();
         while let Some(chr) = iter.next() {
             let chr = chr as u8;
             match chr {
@@ -180,11 +188,10 @@ impl Screen {
     /// Handle a potential escape sequence.
     /// The function is called when the ESC character is encouneted in a stream.
     fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::str::Chars<'_>) {
-        let mut esc = Escape::new();
-        esc.parse(iter.clone());
+        self.esc.parse(iter.clone());
 
         // Update attributes, if required.
-        if let Some(attr) = esc.attr {
+        if let Some(attr) = self.esc.attr {
             if attr == 0 {
                 self.attr = self.default_attr;
             } else {
@@ -193,14 +200,16 @@ impl Screen {
         }
 
         // Insert a character, if required.
-        if let Some(chr) = esc.chr {
+        if let Some(chr) = self.esc.chr {
             self.insert_char(chr, insert);
         }
 
         // Advance the iterator to after the escape sequence.
-        for _ in 0..esc.len {
+        for _ in 0..self.esc.len {
             iter.next();
         }
+
+        self.esc.reset();
     }
 }
 
