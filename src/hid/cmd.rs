@@ -68,6 +68,8 @@ pub fn send<T, U>(fd: i32, cmd_id: u16, cmd: &T, reply: Option<&mut U>) -> Resul
 
     let result = unsafe {
         // Construct two-part message.
+        // FIXME:
+        // Must use addr_of!() because libc::iovec does not provide iov_base_const.
         let siovs = vec![
             libc::iovec {
                 iov_base: addr_of!(hdr) as *mut libc::c_void,
@@ -81,7 +83,7 @@ pub fn send<T, U>(fd: i32, cmd_id: u16, cmd: &T, reply: Option<&mut U>) -> Resul
 
         // Construct one-part reply buffer.
         let (reply_addr, reply_len) = match reply {
-            Some(u) => (addr_of!(*u) as *mut libc::c_void,
+            Some(u) => (u as *mut U as *mut libc::c_void,
                         size_of::<U>()),
             None => (std::ptr::null_mut(), 0)
         };
