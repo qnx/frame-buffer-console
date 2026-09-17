@@ -60,7 +60,7 @@ impl IoMsgImpl for SerialServer {
             st_rdev: libc::S_IFCHR,
             st_uid: self.perms.uid,
             st_gid: self.perms.gid,
-            st_mode: self.perms.get_mode(),
+            st_mode: self.perms.get_mode() | libc::S_IFCHR,
             st_nlink: 0,
             st_blocksize: 0,
             st_nblocks: 0,
