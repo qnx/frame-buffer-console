@@ -2,6 +2,7 @@ mod framebuffer;
 mod screen;
 mod font;
 mod cursor;
+mod escape;
 
 use framebuffer::FrameBuffer;
 use screen::Screen;

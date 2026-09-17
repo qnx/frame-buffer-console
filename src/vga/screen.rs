@@ -1,7 +1,8 @@
 /// The logical contents of the screen
 
-use crate::vga::font::Font;
 use crate::vga::{Rect, ScreenChar, Cursor};
+use crate::vga::font::Font;
+use crate::vga::escape::Escape;
 
 pub struct Screen {
     /// Screen contents (character and attrbitute for each position).
@@ -13,7 +14,11 @@ pub struct Screen {
     /// Cursor position and shape.
     pub cursor: Cursor,
     /// Region of updated contents.
-    dirty: Rect
+    dirty: Rect,
+    /// Default character attributes.
+    default_attr: u8,
+    /// Current attributes.
+    attr: u8
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
@@ -31,7 +36,9 @@ impl Screen {
             columns,
             rows,
             dirty: Rect { left: 0, top: 0, right: columns, bottom: rows },
-            cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 }
+            cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 },
+            default_attr: 0x07,
+            attr: 0x07
         };
 
         // Start with a clear screen.
@@ -114,9 +121,12 @@ impl Screen {
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
 
         // Insert characters.
-        for chr in chrs.bytes() {
+        let mut iter = chrs.chars();
+        while let Some(chr) = iter.next() {
+            let chr = chr as u8;
             match chr {
                 b'\n' => self.insert_newline(&mut insert),
+                0x1b => self.maybe_escape(&mut insert, &mut iter),
                 _ => self.insert_char(chr, &mut insert)
             }
         }
@@ -134,7 +144,7 @@ impl Screen {
 
     fn insert_char(&mut self, chr: u8, insert: &mut Insert) {
         // Update the buffer with the given character.
-        self.buffer[insert.bufidx] = ScreenChar { chr, attr: 0x07 };
+        self.buffer[insert.bufidx] = ScreenChar { chr, attr: self.attr };
         insert.bufidx += 1;
 
         // Move the position one to the right, wrapping as necessary.
@@ -165,6 +175,32 @@ impl Screen {
             insert.scroll += 1;
         }
         insert.len = len;
+    }
+
+    /// Handle a potential escape sequence.
+    /// The function is called when the ESC character is encouneted in a stream.
+    fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::str::Chars<'_>) {
+        let mut esc = Escape::new();
+        esc.parse(iter.clone());
+
+        // Update attributes, if required.
+        if let Some(attr) = esc.attr {
+            if attr == 0 {
+                self.attr = self.default_attr;
+            } else {
+                self.attr = attr;
+            }
+        }
+
+        // Insert a character, if required.
+        if let Some(chr) = esc.chr {
+            self.insert_char(chr, insert);
+        }
+
+        // Advance the iterator to after the escape sequence.
+        for _ in 0..esc.len {
+            iter.next();
+        }
     }
 }
 
