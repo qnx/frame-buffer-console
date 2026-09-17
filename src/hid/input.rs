@@ -56,13 +56,17 @@ fn translate_key(data: &[u8]) -> Option<Key> {
 
     let key = data[2];
 
-    let mut chr = 0;
+    let chr: u8;
     if key >= 0x4 && key < 0x1d {
         if is_shift {
             chr = key - 0x4 + b'A';
         } else {
             chr = key - 0x4 + b'a';
         }
+    } else if key == 0x28 {
+        chr = b'\n';
+    } else {
+        chr = 0;
     }
 
     if chr == 0 {
