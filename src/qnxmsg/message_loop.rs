@@ -12,6 +12,7 @@ use crate::qnxmsg::iomsg::openfd::*;
 use crate::qnxmsg::iomsg::read::*;
 use crate::qnxmsg::iomsg::stat::*;
 use crate::qnxmsg::iomsg::write::*;
+use crate::qnxmsg::iomsg::pulse::*;
 
 pub fn message_loop<ServerT>(server: &mut ServerT, channel: Channel)
 where ServerT: IoMsgImpl
@@ -39,15 +40,10 @@ where ServerT: IoMsgImpl
         Err(err) => { return -err; }
     };
 
-    if rcvid < 0 {
-        let err = rcvid as i32;
-        return -err;
-    }
-
     if rcvid == 0 {
-        // FIXME:
-        // Support pulses.
-        todo!();
+        // Received a pulse.
+        pulse(server, buf);
+        return 0;
     }
 
     trans.set_rcvid(rcvid);

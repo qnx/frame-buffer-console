@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use crate::qnxmsg;
 use crate::qnxmsg::iomsg::*;
 use crate::qnxmsg::transaction::Transaction;
+use crate::qnxmsg::Pulse;
 use crate::serial::{SerialServer, SerialSession};
 use crate::libc_missing;
 
@@ -222,5 +223,10 @@ impl IoMsgImpl for SerialServer {
             },
             None => Err(libc::EBADF)
         }
+    }
+
+    fn pulse(&mut self, pulse: &Pulse) {
+        let (code, scoid) = (pulse.code, pulse.scoid);
+        println!("Received pulse {code} from {scoid}");
     }
 }

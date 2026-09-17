@@ -12,6 +12,7 @@ pub mod notify;
 pub mod read;
 pub mod stat;
 pub mod write;
+pub mod pulse;
 
 pub const _IO_CONNECT: u16 = 0x100;
 pub const _IO_CONNECT_COMBINE: u16 = 0;
@@ -239,5 +240,8 @@ pub trait IoMsgImpl {
     fn close(&mut self, _trans: &Transaction)
              -> Result<(), i32> {
         Err(libc::ENOSYS)
+    }
+
+    fn pulse(&mut self, _pulse: &Pulse) {
     }
 }

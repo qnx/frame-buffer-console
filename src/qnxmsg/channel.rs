@@ -1,4 +1,5 @@
 use crate::qnxmsg::MsgInfo;
+use crate::qnxmsg::Pulse;
 use crate::qnxmsg::msgbuf::MsgBuf;
 
 /// Channel object.
@@ -40,7 +41,11 @@ impl Channel {
             return Err(-rcvid as i32);
         }
 
-        buf.set_length(info.msglen as usize);
+        if rcvid == 0 {
+            buf.set_length(size_of::<Pulse>());
+        } else {
+            buf.set_length(info.msglen as usize);
+        }
         Ok(rcvid)
     }
 }

@@ -44,6 +44,17 @@ pub struct MsgInfo {
     pid_high: i32
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct Pulse {
+    pub pulse_type: u16,
+    pub subtype: u16,
+    pub code: i8,
+    zero: [i8; 3],
+    pub value: libc::sigval,
+    pub scoid: i32
+}
+
 impl MsgInfo {
     pub fn pid64(&self) -> i64 {
         let high: i64 = self.pid_high.into();
