@@ -1,7 +1,7 @@
 /// The logical contents of the screen
 
 use crate::vga::font::Font;
-use crate::vga::{Rect, ScreenChar, Cursor, CursorDir};
+use crate::vga::{Rect, ScreenChar, Cursor};
 
 pub struct Screen {
     /// Screen contents (character and attrbitute for each position).
@@ -107,52 +107,6 @@ impl Screen {
         }
 
         is_dirty
-    }
-
-    /// Reposition cursor according to the direction.
-    pub fn move_cursor(&mut self, dir: CursorDir) {
-        let (mut col, mut row) = (self.cursor.col, self.cursor.row);
-        match dir {
-            CursorDir::_Left => {
-                if col > 0 {
-                    col -= 1
-                }
-            },
-            CursorDir::_Right => {
-                if col < self.columns - 1 {
-                    col += 1
-                }
-            },
-            CursorDir::_Up => {
-                if row > 0 {
-                    row -= 1
-                }
-            }
-            CursorDir::_Down => {
-                if row < self.rows - 1 {
-                    row += 1
-                }
-            }
-            CursorDir::Forward => {
-                if col < self.columns - 1 {
-                    col += 1
-                } else if row < self.rows - 1 {
-                    col = 0;
-                    row += 1;
-                }
-            },
-            CursorDir::_Back => {
-                if col > 0 {
-                    col -= 1;
-                } else if row > 0 {
-                    col = self.columns - 1;
-                    row -= 1;
-                }
-            },
-        }
-
-        self.cursor.col = col;
-        self.cursor.row = row;
     }
 
     pub fn insert_at_cursor(&mut self, chrs: &str) {

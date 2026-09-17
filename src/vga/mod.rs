@@ -6,7 +6,7 @@ mod cursor;
 use framebuffer::FrameBuffer;
 use screen::Screen;
 use font::Font;
-use cursor::{Cursor, CursorDir};
+use cursor::{Cursor};
 
 use std::sync::{Arc, Mutex, Condvar};
 use std::thread;
