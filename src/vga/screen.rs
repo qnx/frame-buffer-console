@@ -41,15 +41,6 @@ impl Screen {
         Ok(screen)
     }
 
-    pub fn set_char(&mut self, chr: ScreenChar, col: u32, row: u32) {
-        if col >= self.columns || row > self.rows {
-            return;
-        }
-
-        let pos = (row * self.columns + col) as usize;
-        self.buffer[pos] = chr;
-    }
-
     /// Get the current dirty rectangle and reset to an empty one.
     pub fn get_rect(&mut self) -> Rect {
         let rect = self.dirty;

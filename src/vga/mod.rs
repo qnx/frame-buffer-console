@@ -87,24 +87,6 @@ impl Vga {
         Vga { obj: self.obj.clone() }
     }
 
-    pub fn insert_char_at_cursor(&mut self, chr: u8, attr: u8, update_cursor: bool) {
-        let mut screen = self.obj.screen.lock().unwrap();
-        let (col, row) = (screen.cursor.col, screen.cursor.row);
-
-        screen.set_char(ScreenChar { chr, attr }, col, row);
-        let mut is_dirty = screen.set_dirty(col, row, 1);
-
-        if update_cursor {
-            screen.move_cursor(CursorDir::Forward);
-            let (col, row) = (screen.cursor.col, screen.cursor.row);
-            is_dirty = screen.set_dirty(col, row, 1) || is_dirty;
-        }
-
-        if is_dirty {
-            self.obj.cond.notify_one();
-        }
-    }
-
     pub fn insert_at_cursor(&mut self, chrs: &str) {
         let mut screen = self.obj.screen.lock().unwrap();
         screen.insert_at_cursor(chrs);

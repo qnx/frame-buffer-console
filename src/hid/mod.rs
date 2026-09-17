@@ -13,7 +13,6 @@ use std::mem::MaybeUninit;
 use keyboard::Keyboard;
 use report::Report;
 use input::InputReport;
-use crate::vga::Vga;
 use crate::serial::SerialServer;
 use crate::serial::connection::SerialConnection;
 
@@ -117,7 +116,7 @@ fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
 }
 
 /// Thread used to poll io-hid for events.
-fn poll_thread(fd: i32, mut vga: Vga, sconn: SerialConnection) {
+fn poll_thread(fd: i32, sconn: SerialConnection) {
     // Construct a poll command.
     // Once a device is attached, the poll command message can return a report, so the reply needs
     // to include a Report structure.
@@ -142,7 +141,7 @@ fn poll_thread(fd: i32, mut vga: Vga, sconn: SerialConnection) {
         let event = unsafe { event.assume_init() };
         match event.event_type {
             HIDDI_EVT_INSERTION => device_inserted(&event, fd, &mut device),
-            HIDDI_EVT_HID_REPORT => report_received(&event, &mut device, &mut vga, &sconn),
+            HIDDI_EVT_HID_REPORT => report_received(&event, &mut device, &sconn),
             HIDDI_EVT_REMOVAL => device_removed(&event, &mut device),
             event_type => println!("Received event {event_type}")
         };
@@ -230,7 +229,7 @@ fn device_removed(event: &HidEvent, device: &mut Option<Keyboard>) {
 }
 
 fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
-                   vga: &mut Vga, sconn: &SerialConnection) {
+                   sconn: &SerialConnection) {
     let device = match device {
         None => {
             println!("Report without a device");
@@ -259,13 +258,12 @@ fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
 
     let key = input_report.as_key();
     if let Some(key) = device.key_pressed(key) {
-        vga.insert_char_at_cursor(key.chr, 0x07, true);
         sconn.emit_key_event(key.chr).unwrap();
     }
 }
 
 impl Hid {
-    pub fn new(vga: &Vga, server: &SerialServer) -> Result<Hid, i32> {
+    pub fn new(server: &SerialServer) -> Result<Hid, i32> {
         // Open a connection to the server.
         let fd = open(c"/dev/io-hid/io-hid", libc::O_RDWR)?;
 
@@ -282,9 +280,8 @@ impl Hid {
         cmd::send(fd, cmd::CONNECT, &cmd, NO_REPLY)?;
 
         // Start the event polling thread.
-        let vga = vga.clone();
         let sconn = server.get_connection();
-        let thandle = thread::spawn(move || { poll_thread(fd, vga, sconn); });
+        let thandle = thread::spawn(move || { poll_thread(fd, sconn); });
 
         Ok(Hid { fd, thandle: Some(thandle) })
     }
