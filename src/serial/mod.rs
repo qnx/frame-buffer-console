@@ -1,5 +1,6 @@
 mod iomsg;
 mod devctl;
+pub mod connection;
 
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
@@ -8,6 +9,7 @@ use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::vga::Vga;
+use crate::serial::connection::SerialConnection;
 
 /// Main server structure.
 pub struct SerialServer {
@@ -67,6 +69,10 @@ impl SerialServer {
     /// Receive and handle messages on the server's channel.
     pub fn message_loop(&mut self) {
         message_loop(self, self.channel);
+    }
+
+    pub fn get_connection(&self) -> SerialConnection {
+        SerialConnection::new(self.channel)
     }
 
     /// Determine if this device is the controlling terminal for the given session ID.

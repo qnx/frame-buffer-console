@@ -43,12 +43,6 @@ impl IoMsgImpl for SerialServer {
 
         self.vga.insert_at_cursor(data);
         trans.reply(data.len() as i64);
-
-        if let Some(read_trans) = &mut self.read {
-            read_trans.reply_with_payload_and_size(data.len() as i64, data, data.len());
-            self.read = None;
-        }
-
         Ok(())
     }
 

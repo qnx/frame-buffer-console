@@ -44,6 +44,12 @@ where ServerT: IoMsgImpl
         return -err;
     }
 
+    if rcvid == 0 {
+        // FIXME:
+        // Support pulses.
+        todo!();
+    }
+
     trans.set_rcvid(rcvid);
 
     // Dispatch the message to the appropriate handler.

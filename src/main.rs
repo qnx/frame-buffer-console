@@ -10,8 +10,8 @@ use serial::SerialServer;
 
 fn main() {
     let mut vga = Vga::new().unwrap();
-    let _hid = Hid::new(&vga).unwrap();
     let mut server = SerialServer::new(&vga);
+    let _hid = Hid::new(&vga, &server).unwrap();
 
     let msg = "Welcome to UEFI console!\n";
     vga.insert_at_cursor(msg);
