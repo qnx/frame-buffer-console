@@ -48,7 +48,7 @@ impl SerialServer {
             channel: Channel::new(0).unwrap(),
             session_table: SessionTable::<SerialSession>::new(),
             vga: vga.clone(),
-            perms: FilePerms::new(0, 0, 0o600),
+            perms: FilePerms::new(0, 0, 0o666),
             job: None
         };
 
