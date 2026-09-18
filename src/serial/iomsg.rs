@@ -6,7 +6,7 @@ use crate::qnxmsg;
 use crate::qnxmsg::iomsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::Pulse;
-use crate::serial::{SerialServer, SerialSession};
+use crate::serial::{SerialServer, SerialSession, NotifyClient};
 use crate::libc_missing;
 
 impl IoMsgImpl for SerialServer {
@@ -48,7 +48,7 @@ impl IoMsgImpl for SerialServer {
     }
 
     /// Handle an _IO_READ message.
-    fn read(&mut self, _msg: &ReadMsg, trans: &mut Transaction)
+    fn read(&mut self, msg: &ReadMsg, trans: &mut Transaction)
             -> Result<(), i32> {
         let session = match self.session_table.get(trans.session_id()) {
             None => { return Err(libc::EBADF); },
@@ -79,7 +79,17 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EBUSY);
         }
 
-        self.read = Some(trans.reply_later());
+        // If there are no pending keys, then remember the transaction so that it can be replied to
+        // once a key event occurs.
+        if self.pending_keys.is_empty() {
+            self.read = Some(trans.reply_later());
+            return Ok(());
+        }
+
+        // Reply with pending keys.
+        let (data, len) = self.pending_keys.get_data(msg.nbytes as usize);
+        trans.reply_with_payload_and_size(len as i64, data, len);
+        self.pending_keys.pop(len);
         Ok(())
     }
 
@@ -198,9 +208,54 @@ impl IoMsgImpl for SerialServer {
     }
 
     /// Handle an _IO_NOTIFY message.
-    fn notify(&mut self, _msg: &NotifyMsg, _payload: &[u8], trans: &mut Transaction)
+    /// Queries the server for any pending keys, allowing for a notification to be armed if no keys
+    /// are available.
+    fn notify(&mut self, msg: &NotifyMsg, _fds: &[libc::pollfd], trans: &mut Transaction)
               -> Result<(), i32> {
-        trans.reply(0);
+        // For now, we only accept a single fd with an input POLLARM action.
+        let nfds = msg.nfds;
+        let action = msg.action;
+        let flags = msg.flags &
+            (libc_missing::_NOTIFY_COND_INPUT |
+             libc_missing::_NOTIFY_COND_OUTPUT |
+             libc_missing::_NOTIFY_COND_OBAND);
+
+        if nfds != 1 {
+            return Err(libc::EINVAL);
+        }
+
+        let arm = match action {
+            libc_missing::_NOTIFY_ACTION_POLLARM => true,
+            libc_missing::_NOTIFY_ACTION_POLL => false,
+            _ => { return Err(libc::EINVAL); }
+        };
+
+        if flags != libc_missing::_NOTIFY_COND_INPUT {
+            return Err(libc::EINVAL);
+        }
+
+        // Only one notify event.
+        if self.notify.is_some() {
+            return Err(libc::EBUSY);
+        }
+
+        // Reply to the client.
+        // If there are pending keys, then set the satisfied input condition.
+        // Otherwise, store the notification event so that it can be emitted later.
+        let mut reply = NotifyReply {
+            zero: 0,
+            flags: 0
+        };
+
+        if !self.pending_keys.is_empty() {
+            reply.flags = libc_missing::_NOTIFY_COND_INPUT
+        } else if arm {
+            self.notify = Some(NotifyClient { rcvid: trans.get_rcvid(), event: msg.event });
+        } else {
+            // Nothing to do.
+        }
+
+        trans.reply_with_payload(0, &reply);
         Ok(())
     }
 

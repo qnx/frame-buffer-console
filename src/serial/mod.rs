@@ -1,7 +1,9 @@
 mod iomsg;
 mod devctl;
+mod keybuf;
 pub mod connection;
 
+use crate::libc_missing;
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
 use crate::qnxmsg::session::SessionTable;
@@ -9,6 +11,7 @@ use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::vga::Vga;
+use crate::serial::keybuf::KeyBuf;
 use crate::serial::connection::SerialConnection;
 
 /// Main server structure.
@@ -23,8 +26,12 @@ pub struct SerialServer {
     perms: FilePerms,
     /// Job control data.
     job: Option<JobControl>,
+    /// Key events that have not been read.
+    pending_keys: KeyBuf,
     /// Read transaction waiting for a reply.
-    read: Option<Transaction>
+    read: Option<Transaction>,
+    /// A client event to emit when input is available.
+    notify: Option<NotifyClient>
 }
 
 /// Information for an open session.
@@ -46,6 +53,12 @@ struct JobControl {
     sess_fd_coid: i32
 }
 
+/// A client event registered for notification when input is available
+struct NotifyClient {
+    rcvid: i64,
+    event: libc::sigevent
+}
+
 impl SerialServer {
     pub fn new(vga: &Vga) -> Self {
         // Create the server object.
@@ -55,7 +68,9 @@ impl SerialServer {
             vga: vga.clone(),
             perms: FilePerms::new(0, 0, 0o666),
             job: None,
-            read: None
+            pending_keys: KeyBuf::new(),
+            read: None,
+            notify: None
         };
 
         // Attach to the mount point.
@@ -85,10 +100,39 @@ impl SerialServer {
 
     /// Handle a key event from the HID polling thread.
     /// If a client is waiting on a read request, the key is used in a reply to the client.
+    /// Otherwise, the key is queued for a future read().
     fn key_event(&mut self, key: u8) {
+        // Check for a waiting read().
         if let Some(trans) = &mut self.read {
             trans.reply_with_payload(1, &key);
             self.read = None;
+            return;
+        }
+
+        // Queue the key.
+        self.pending_keys.push(key);
+
+        // Notify a client that has registered for input events.
+        if let Some(notify) = &mut self.notify {
+            let mut value = notify.event.sigev_value.sival_ptr as u64;
+            value |= libc_missing::_NOTIFY_COND_INPUT as u64;
+            notify.event.sigev_value.sival_ptr = value as *mut libc::c_void;
+
+            deliver_event(notify.rcvid, &notify.event).unwrap();
+            self.notify = None;
         }
     }
+}
+
+/// Safe wrapper around MsgDeliverEvent_r().
+fn deliver_event(rcvid: i64, event: &libc::sigevent) -> Result<(), i32> {
+    let err = unsafe {
+        libc::MsgDeliverEvent_r(rcvid, event as *const libc::sigevent)
+    };
+
+    if err != 0 {
+        return Err(err);
+    }
+
+    Ok(())
 }

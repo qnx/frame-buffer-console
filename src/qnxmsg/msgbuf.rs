@@ -62,6 +62,15 @@ impl MsgBuf {
         Ok(&data[0])
     }
 
+    /// Obtain a view into the message's payload as a slice of elements of a specific type.
+    /// The offset argument specifies where in the payload the view starts.
+    /// The end is determined by the size of the destination type.
+    pub fn get_data_as_slice_of<T>(&self, offset: usize) -> Result<&[T], i32> {
+        let (head, data, _) = unsafe { self.data[offset..].align_to::<T>() };
+        assert!(head.is_empty());
+        Ok(data)
+    }
+
     /// Get access to the buffer for use with MsgReceive().
     pub fn as_void_ptr(&mut self) -> *mut libc::c_void {
         std::ptr::addr_of!(self.data) as *mut libc::c_void

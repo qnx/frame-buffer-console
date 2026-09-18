@@ -174,6 +174,7 @@ pub struct NotifyMsg {
     combine_len: u16,
     pub action: u32,
     pub flags: u32,
+    pad: u32,
     pub event: libc::sigevent,
     pub mgr: [i32; 2],
     pub flags_extra_mask: u32,
@@ -181,7 +182,15 @@ pub struct NotifyMsg {
     pub nfds: i32,
     pub fd_first: i32,
     pub nfds_ready: i32,
+    pad2: u32,
     pub timo: i64
+}
+
+#[repr(C, packed)]
+#[derive(Debug)]
+pub struct NotifyReply {
+    pub zero: u32,
+    pub flags: u32
 }
 
 /// Trait for I/O messages delivered to the server.
@@ -232,7 +241,7 @@ pub trait IoMsgImpl {
         Err(libc::ENOSYS)
     }
 
-    fn notify(&mut self, _msg: &NotifyMsg, _payload: &[u8], _trans: &mut Transaction)
+    fn notify(&mut self, _msg: &NotifyMsg, _fds: &[libc::pollfd], _trans: &mut Transaction)
            -> Result<(), i32> {
         Err(libc::ENOSYS)
     }
