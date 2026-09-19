@@ -182,7 +182,7 @@ impl Screen {
         if insert.row == self.rows {
             insert.scroll += 1;
         }
-        insert.len = len;
+        insert.len += len;
     }
 
     /// Handle a potential escape sequence.
