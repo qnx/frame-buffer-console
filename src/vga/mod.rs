@@ -109,15 +109,11 @@ fn screen_update_thread(vga: Arc<VgaObj>) {
     loop {
         // Determine size of rectangle to update. If it is first or last row or column, update
         // to the edge of the screen.
-        let mut rect = screen.get_rect();
-        if rect.right >= screen.columns {
-            rect.right = screen.columns - 1;
-        }
-        if rect.bottom >= screen.rows {
-            rect.bottom = screen.rows - 1;
+        if let Some(rect) = screen.get_rect() {
+            draw_screen(&vga, &screen, &rect);
         }
 
-        draw_screen(&vga, &screen, &rect);
+        // Wait for a signal to redraw the screen.
         screen = vga.cond.wait(screen).unwrap();
     }
 }

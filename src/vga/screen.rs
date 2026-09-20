@@ -17,7 +17,7 @@ pub struct Screen {
     /// Cursor position and shape.
     pub cursor: Cursor,
     /// Region of updated contents.
-    dirty: Rect,
+    dirty: Option<Rect>,
     /// Default character attributes.
     default_attr: u8,
     /// Current attributes.
@@ -41,7 +41,7 @@ impl Screen {
             buffer_top_row: 0,
             columns,
             rows,
-            dirty: Rect { left: 0, top: 0, right: columns, bottom: rows },
+            dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
             cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 },
             default_attr: 0x07,
             attr: 0x07,
@@ -62,9 +62,9 @@ impl Screen {
     }
 
     /// Get the current dirty rectangle and reset to an empty one.
-    pub fn get_rect(&mut self) -> Rect {
+    pub fn get_rect(&mut self) -> Option<Rect> {
         let rect = self.dirty;
-        self.dirty = Rect { left: self.columns, top: self.rows, right: 0, bottom: 0 };
+        self.dirty = None;
         rect
     }
 
@@ -72,24 +72,32 @@ impl Screen {
     /// The region is combined with the existing dirty rectangle.
     fn set_dirty(&mut self, rect: &Rect) -> bool {
         let mut is_dirty = false;
+        if let Some(mut dirty) = self.dirty {
+            if rect.left < dirty.left {
+                dirty.left = rect.left;
+                is_dirty = true;
+            }
 
-        if rect.left < self.dirty.left {
-            self.dirty.left = rect.left;
-            is_dirty = true;
-        }
+            if rect.right > dirty.right {
+                dirty.right = rect.right;
+                is_dirty = true;
+            }
 
-        if rect.right > self.dirty.right {
-            self.dirty.right = rect.right;
-            is_dirty = true;
-        }
+            if rect.top < dirty.top {
+                dirty.top = rect.top;
+                is_dirty = true;
+            }
 
-        if rect.top < self.dirty.top {
-            self.dirty.top = rect.top;
-            is_dirty = true;
-        }
+            if rect.bottom > dirty.bottom {
+                dirty.bottom = rect.bottom;
+                is_dirty = true;
+            }
 
-        if rect.bottom > self.dirty.bottom {
-            self.dirty.bottom = rect.bottom;
+            if is_dirty {
+                self.dirty = Some(dirty);
+            }
+        } else {
+            self.dirty = Some(*rect);
             is_dirty = true;
         }
 
@@ -231,7 +239,8 @@ impl Screen {
         self.buffer_top_row = (self.buffer_top_row + 1) % self.rows;
 
         // The entire screen needs to be updated.
-        self.dirty = Rect { left: 0, top: 0, right: self.columns, bottom: self.rows };
+        self.dirty =
+            Some(Rect { left: 0, top: 0, right: self.columns - 1, bottom: self.rows - 1});
     }
 }
 
