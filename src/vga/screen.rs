@@ -101,6 +101,7 @@ impl Screen {
             let chr = chr as u8;
             match chr {
                 b'\n' => self.insert_newline(&mut insert),
+                0x07 => self.bell(),
                 0x08 => self.backspace(&mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
                 _ => self.insert_char(chr, &mut insert)
@@ -171,6 +172,10 @@ impl Screen {
 
         insert.bufidx -= 1;
         self.buffer[insert.bufidx] = BLANK_CHAR;
+    }
+
+    fn bell(&mut self) {
+        // Do nothing for now.
     }
 
     /// Handle a potential escape sequence.
