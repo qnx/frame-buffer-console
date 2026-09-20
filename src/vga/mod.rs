@@ -104,17 +104,25 @@ impl Vga {
     }
 }
 
+/// Thread for drawing the contents of the screen whenever these are updated.
 fn screen_update_thread(vga: Arc<VgaObj>) {
-    let mut screen = vga.screen.lock().unwrap();
     loop {
-        // Determine size of rectangle to update. If it is first or last row or column, update
-        // to the edge of the screen.
-        if let Some(rect) = screen.get_rect() {
-            draw_screen(&vga, &screen, &rect);
-        }
+        // Throttle drawing to ~30FPS (must not be holding the screen's lock).
+        // This provides smoother drawing with successive screen updates.
+        thread::sleep(std::time::Duration::from_millis(33));
 
-        // Wait for a signal to redraw the screen.
-        screen = vga.cond.wait(screen).unwrap();
+        let mut screen = vga.screen.lock().unwrap();
+        loop {
+            // Check if an update is required.
+            if let Some(rect) = screen.get_rect() {
+                // Yes, redraw.
+                draw_screen(&vga, &screen, &rect);
+                break;
+            }
+
+            // No, wait for a signal.
+            screen = vga.cond.wait(screen).unwrap();
+        }
     }
 }
 
