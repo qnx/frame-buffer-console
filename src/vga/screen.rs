@@ -101,6 +101,7 @@ impl Screen {
             let chr = chr as u8;
             match chr {
                 b'\n' => self.insert_newline(&mut insert),
+                0x08 => self.backspace(&mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
                 _ => self.insert_char(chr, &mut insert)
             }
@@ -154,6 +155,22 @@ impl Screen {
             insert.scroll += 1;
         }
 
+    }
+
+    fn backspace(&mut self, insert: &mut Insert) {
+        // Move the insertion position backwards.
+        if insert.col > 0 {
+            insert.col -= 1;
+        } else if insert.row > 0 {
+            insert.col = 0;
+            insert.row -= 1;
+        } else {
+            // At the beginning of the screen, cannot go backwards.
+            return;
+        }
+
+        insert.bufidx -= 1;
+        self.buffer[insert.bufidx] = BLANK_CHAR;
     }
 
     /// Handle a potential escape sequence.
