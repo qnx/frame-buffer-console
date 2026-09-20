@@ -10,7 +10,7 @@ use crate::qnxmsg::session::SessionTable;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
-use crate::vga::Vga;
+use crate::display::Display;
 use crate::serial::keybuf::KeyBuf;
 use crate::serial::connection::SerialConnection;
 
@@ -21,7 +21,7 @@ pub struct SerialServer {
     /// Table of connected client sessions.
     session_table: SessionTable<SerialSession>,
     /// Display access structure.
-    vga: Vga,
+    display: Display,
     /// POSIX IDs and file permissions for the device node.
     perms: FilePerms,
     /// Job control data.
@@ -60,12 +60,12 @@ struct NotifyClient {
 }
 
 impl SerialServer {
-    pub fn new(vga: &Vga) -> Self {
+    pub fn new(display: &Display) -> Self {
         // Create the server object.
         let server = SerialServer {
             channel: Channel::new(0).unwrap(),
             session_table: SessionTable::<SerialSession>::new(),
-            vga: vga.clone(),
+            display: display.clone(),
             perms: FilePerms::new(0, 0, 0o666),
             job: None,
             pending_keys: KeyBuf::new(),

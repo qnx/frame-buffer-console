@@ -1,8 +1,8 @@
 /// The logical contents of the screen
 
-use crate::vga::{Rect, ScreenChar, Cursor};
-use crate::vga::font::Font;
-use crate::vga::escape::Escape;
+use crate::display::{Rect, ScreenChar, Cursor};
+use crate::display::font::Font;
+use crate::display::escape::Escape;
 
 pub struct Screen {
     /// Screen contents (character and attrbitute for each position).

@@ -236,8 +236,8 @@ impl SerialServer {
 
     /// Get screen size.
     fn tcgetsize(&mut self, trans: &mut Transaction) -> Result<(), i32> {
-        let (columns, rows) = self.vga.screen_size();
-        let (width, height) = self.vga.framebuffer_size();
+        let (columns, rows) = self.display.screen_size();
+        let (width, height) = self.display.framebuffer_size();
         let reply = TcgetsizeReply {
             hdr: DevctlReply::new::<libc::winsize>(0),
             size: libc::winsize {
@@ -257,8 +257,8 @@ impl SerialServer {
             Err(_) => { return Err(libc::EBADMSG); }
         };
 
-        let (columns, rows) = self.vga.screen_size();
-        let (width, height) = self.vga.framebuffer_size();
+        let (columns, rows) = self.display.screen_size();
+        let (width, height) = self.display.framebuffer_size();
         if (columns != winsize.ws_col as u32) ||
            (rows != winsize.ws_row as u32) ||
            (width != winsize.ws_xpixel as u32) ||

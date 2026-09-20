@@ -12,11 +12,11 @@ use cursor::{Cursor};
 use std::sync::{Arc, Mutex, Condvar};
 use std::thread;
 
-pub struct Vga {
-    obj: Arc<VgaObj>
+pub struct Display {
+    obj: Arc<DisplayObj>
 }
 
-struct VgaObj {
+struct DisplayObj {
     framebuffer: FrameBuffer,
     screen: Mutex<Screen>,
     cond: Condvar,
@@ -59,8 +59,8 @@ struct Rect {
     bottom: u32
 }
 
-impl Vga {
-    pub fn new() -> Result<Vga, ()> {
+impl Display {
+    pub fn new() -> Result<Display, ()> {
         // Map the frame buffer.
         let framebuffer = FrameBuffer::new()?;
 
@@ -69,8 +69,8 @@ impl Vga {
         let screen = Screen::new(framebuffer.width, framebuffer.height, font)?;
         let screen = Mutex::<Screen>::new(screen);
 
-        let vga = Vga {
-            obj: Arc::<VgaObj>::new(VgaObj {
+        let display = Display {
+            obj: Arc::<DisplayObj>::new(DisplayObj {
                 framebuffer,
                 screen,
                 cond: Condvar::new(),
@@ -79,13 +79,13 @@ impl Vga {
         };
 
         // Start the screen update thread.
-        let cloned_vga = vga.obj.clone();
-        thread::spawn(move || { screen_update_thread(cloned_vga); });
-        Ok(vga)
+        let cloned_display = display.obj.clone();
+        thread::spawn(move || { screen_update_thread(cloned_display); });
+        Ok(display)
     }
 
-    pub fn clone(&self) -> Vga {
-        Vga { obj: self.obj.clone() }
+    pub fn clone(&self) -> Display {
+        Display { obj: self.obj.clone() }
     }
 
     pub fn insert_at_cursor(&mut self, chrs: &str) {
@@ -105,41 +105,41 @@ impl Vga {
 }
 
 /// Thread for drawing the contents of the screen whenever these are updated.
-fn screen_update_thread(vga: Arc<VgaObj>) {
+fn screen_update_thread(display: Arc<DisplayObj>) {
     loop {
         // Throttle drawing to ~30FPS (must not be holding the screen's lock).
         // This provides smoother drawing with successive screen updates.
         thread::sleep(std::time::Duration::from_millis(33));
 
-        let mut screen = vga.screen.lock().unwrap();
+        let mut screen = display.screen.lock().unwrap();
         loop {
             // Check if an update is required.
             if let Some(rect) = screen.get_rect() {
                 // Yes, redraw.
-                draw_screen(&vga, &screen, &rect);
+                draw_screen(&display, &screen, &rect);
                 break;
             }
 
             // No, wait for a signal.
-            screen = vga.cond.wait(screen).unwrap();
+            screen = display.cond.wait(screen).unwrap();
         }
     }
 }
 
-fn draw_screen(vga: &VgaObj, screen: &Screen, rect: &Rect) {
+fn draw_screen(display: &DisplayObj, screen: &Screen, rect: &Rect) {
     for row in rect.top..=rect.bottom {
         for col in rect.left..=rect.right {
-            draw_glyph(&vga, screen, col, row);
+            draw_glyph(&display, screen, col, row);
         }
     }
 }
 
 /// Draw the glyph of a given character into the frame buffer at the specified column and row.
-fn draw_glyph(vga: &VgaObj, screen: &Screen, col: u32, row: u32) {
+fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
     const BYTES_PER_PIXEL: u64 = size_of::<u32>() as u64;
 
-    let font = vga.font;
-    let framebuffer = &vga.framebuffer;
+    let font = display.font;
+    let framebuffer = &display.framebuffer;
     let chr = screen.char_at(col, row);
 
     // Don't render past right side of the frame.

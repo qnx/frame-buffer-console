@@ -42,7 +42,7 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EACCES);
         }
 
-        self.vga.insert_at_cursor(data);
+        self.display.insert_at_cursor(data);
         trans.reply(data.len() as i64);
         Ok(())
     }
