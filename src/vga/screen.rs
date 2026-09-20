@@ -60,60 +60,27 @@ impl Screen {
 
     /// Mark a region as dirty.
     /// The region is combined with the existing dirty rectangle.
-    pub fn set_dirty(&mut self, col: u32, row: u32, nchars: u32) -> bool {
+    fn set_dirty(&mut self, rect: &Rect) -> bool {
         let mut is_dirty = false;
 
-        if col + nchars > self.columns {
-            // Multi-line update.
-            // Extend the rectangle horizontally to include complete rows.
-            if self.dirty.left > 0 {
-                self.dirty.left = 0;
-                is_dirty = true;
-            }
+        if rect.left < self.dirty.left {
+            self.dirty.left = rect.left;
+            is_dirty = true;
+        }
 
-            if self.dirty.right < self.columns - 1 {
-                self.dirty.right = self.columns - 1;
-                is_dirty = true;
-            }
+        if rect.right > self.dirty.right {
+            self.dirty.right = rect.right;
+            is_dirty = true;
+        }
 
-            // Calculate the rows to include.
-            if row < self.dirty.top {
-                self.dirty.top = row;
-                is_dirty = true;
-            }
+        if rect.top < self.dirty.top {
+            self.dirty.top = rect.top;
+            is_dirty = true;
+        }
 
-            let mut bottom = row + (col + nchars) / self.columns;
-            if bottom >= self.rows {
-                bottom = self.rows - 1;
-            }
-
-            if bottom > self.dirty.bottom {
-                self.dirty.bottom = bottom;
-                is_dirty = true;
-            }
-        } else {
-            // Single line update.
-            if col < self.dirty.left {
-                self.dirty.left = col;
-                is_dirty = true;
-            }
-
-            if row < self.dirty.top {
-                self.dirty.top = row;
-                is_dirty = true;
-            }
-
-            // We already know that col + nchars - 1 < self.columns.
-            let right = col + nchars - 1;
-            if right > self.dirty.right {
-                self.dirty.right = right;
-                is_dirty = true;
-            }
-
-            if row > self.dirty.bottom {
-                self.dirty.bottom = row;
-                is_dirty = true;
-            }
+        if rect.bottom > self.dirty.bottom {
+            self.dirty.bottom = rect.bottom;
+            is_dirty = true;
         }
 
         is_dirty
@@ -139,12 +106,13 @@ impl Screen {
             }
         }
 
-        // Update the dirty rectangle.
-        self.set_dirty(self.cursor.col, self.cursor.row, insert.len);
-
         // Set new cursor position.
         self.cursor.col = insert.col;
         self.cursor.row = insert.row;
+        insert.update_rect(insert.col, insert.row);
+
+        // Update the dirty rectangle.
+        self.set_dirty(&insert.rect);
 
         // FIXME:
         // Scrolling.
@@ -155,6 +123,9 @@ impl Screen {
         self.buffer[insert.bufidx] = ScreenChar { chr, attr: self.attr };
         insert.bufidx += 1;
 
+        // Update bounding rectangle of this insertion.
+        insert.update_rect(insert.col, insert.row);
+
         // Move the position one to the right, wrapping as necessary.
         insert.col += 1;
         if insert.col == self.columns {
@@ -164,17 +135,17 @@ impl Screen {
                 insert.scroll += 1;
             }
         }
-        insert.len += 1;
     }
 
     fn insert_newline(&mut self, insert: &mut Insert) {
         // Fill the buffer with empty characters from the given position to the end of the row.
-        let mut len = 0;
         for _ in insert.col..self.columns {
             self.buffer[insert.bufidx] = BLANK_CHAR;
             insert.bufidx += 1;
-            len += 1;
         }
+
+        // Update bounding rectangle.
+        insert.update_rect(self.columns - 1, insert.row);
 
         // Move to the next line.
         insert.col = 0;
@@ -182,7 +153,7 @@ impl Screen {
         if insert.row == self.rows {
             insert.scroll += 1;
         }
-        insert.len += len;
+
     }
 
     /// Handle a potential escape sequence.
@@ -221,8 +192,8 @@ struct Insert {
     row: u32,
     /// Position in the screen buffer.
     bufidx: usize,
-    /// Total number of characters inserted.
-    len: u32,
+    /// Area of the screen affected by the update.
+    rect: Rect,
     /// How many lines of scrolling are needed.
     scroll: u32
 }
@@ -233,8 +204,23 @@ impl Insert {
             col,
             row,
             bufidx: (row * screen.columns + col) as usize,
-            len: 0,
+            rect: Rect { left: col, right: col, top: row, bottom: row },
             scroll: 0
+        }
+    }
+
+    pub fn update_rect(&mut self, col: u32, row: u32) {
+        if col < self.rect.left {
+            // Can happen on a new line.
+            self.rect.left = col;
+        }
+
+        if col > self.rect.right {
+            self.rect.right = col;
+        }
+
+        if row > self.rect.bottom {
+            self.rect.bottom = row;
         }
     }
 }
