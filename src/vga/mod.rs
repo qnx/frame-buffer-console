@@ -136,7 +136,7 @@ fn draw_glyph(vga: &VgaObj, screen: &Screen, col: u32, row: u32) {
 
     let font = vga.font;
     let framebuffer = &vga.framebuffer;
-    let chr = &screen.buffer[((row * screen.columns) + col) as usize];
+    let chr = screen.char_at(col, row);
 
     // Don't render past right side of the frame.
     let font_width = font.width as u64;
