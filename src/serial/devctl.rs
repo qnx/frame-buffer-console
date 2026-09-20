@@ -172,7 +172,6 @@ impl SerialServer {
         procmgr_session_ext(sid, 0, pgid, libc_missing::PROCMGR_SESSION_SETPGRP)?;
 
         self.job.as_mut().unwrap().fpgid = pgid;
-        println!("New foreground process groupd {pgid}");
         trans.reply(0);
         Ok(())
     }
