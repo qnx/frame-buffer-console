@@ -7,6 +7,7 @@ pub const PROT_NOCACHE: libc::c_int = 0x0000_0800;
 pub const MAP_PHYS: libc::c_int = 0x0001_0000;
 pub const _NTO_DUPFD_VERIFY: libc::c_int = 5;
 pub const PROCMGR_SESSION_SETPGRP: u32 = 2;
+pub const PROCMGR_SESSION_SIGNAL_PGRP: u32 = 4;
 pub const _NOTIFY_ACTION_POLL: u32 = 0x2;
 pub const _NOTIFY_ACTION_POLLARM: u32 = 0x3;
 pub const _NOTIFY_COND_INPUT: u32 = 0x10000000;

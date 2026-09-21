@@ -1,6 +1,7 @@
 /// Input report parser
 
 use crate::hid::*;
+use crate::hid::key::*;
 
 #[derive(Debug)]
 pub struct InputReport {
@@ -43,10 +44,6 @@ impl InputReport {
         translate_key(&self.data[0..8])
     }
 }
-
-const MOD_LSHIFT: u8 = 0x02;
-const MOD_RSHIFT: u8 = 0x20;
-const MOD_SHIFT: u8 = MOD_LSHIFT | MOD_RSHIFT;
 
 const KEY_USAGE_TABLE: [(u8, u8); 57] = [
     (0, 0),
@@ -110,19 +107,31 @@ const KEY_USAGE_TABLE: [(u8, u8); 57] = [
 
 /// Implementation of key conversion.
 fn translate_key(data: &[u8]) -> Option<Key> {
+    // Translate modifiers.
+    // This gets rid of the distinction between left and right versions, as well as shift (the
+    // impact of shift is folded into the character).
     let mut modifier = data[0];
     let is_shift = modifier & MOD_SHIFT != 0;
     modifier &= !MOD_SHIFT;
 
-    let key = data[2] as usize;
-    if key > KEY_USAGE_TABLE.len() {
+    if modifier & MOD_ALT != 0 {
+        modifier |= MOD_ALT;
+    }
+
+    if modifier & MOD_CTRL != 0 {
+        modifier |= MOD_CTRL;
+    }
+
+    let code = data[2] as usize;
+    if code > KEY_USAGE_TABLE.len() {
         return None;
     }
 
+    // Translate the usage code into the resulting character.
     let chr = if is_shift {
-        KEY_USAGE_TABLE[key].1
+        KEY_USAGE_TABLE[code].1
     } else {
-        KEY_USAGE_TABLE[key].0
+        KEY_USAGE_TABLE[code].0
     };
 
     if chr == 0 {

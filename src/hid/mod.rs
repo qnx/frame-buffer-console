@@ -4,6 +4,7 @@ mod report;
 mod keyboard;
 mod cmd;
 mod input;
+pub mod key;
 
 use libc;
 use std::ffi::CStr;
@@ -85,12 +86,6 @@ struct HidEvent {
 pub struct Hid {
     fd: i32,
     thandle: Option<JoinHandle<()>>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Key {
-    pub chr: u8,
-    pub modifier: u8
 }
 
 #[derive(PartialEq, Debug)]
@@ -258,7 +253,7 @@ fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
 
     let key = input_report.as_key();
     if let Some(key) = device.key_pressed(key) {
-        sconn.emit_key_event(key.chr).unwrap();
+        sconn.emit_key_event(key).unwrap();
     }
 }
 

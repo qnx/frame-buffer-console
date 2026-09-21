@@ -8,6 +8,7 @@ use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::Pulse;
 use crate::serial::{SerialServer, SerialSession, NotifyClient};
 use crate::libc_missing;
+use crate::hid::key::Key;
 
 impl IoMsgImpl for SerialServer {
     /// Handle an _IO_CONNECT message with the _IO_CONNECT_OPEN subtype.
@@ -287,7 +288,7 @@ impl IoMsgImpl for SerialServer {
         }
 
         match code {
-            0 => self.key_event(pulse.value.sival_ptr as u8),
+            0 => self.key_event(Key::from_pulse(pulse)),
             _ => { println!("Unhandled pulse {code}"); }
         };
     }

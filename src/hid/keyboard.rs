@@ -1,6 +1,6 @@
 /// Keyboard device
 
-use crate::hid::Key;
+use crate::hid::key::Key;
 
 #[derive(Debug)]
 pub struct Keyboard {

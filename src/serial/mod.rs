@@ -13,6 +13,7 @@ use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
 use crate::serial::keybuf::KeyBuf;
 use crate::serial::connection::SerialConnection;
+use crate::hid::key::Key;
 
 /// Main server structure.
 pub struct SerialServer {
@@ -101,16 +102,24 @@ impl SerialServer {
     /// Handle a key event from the HID polling thread.
     /// If a client is waiting on a read request, the key is used in a reply to the client.
     /// Otherwise, the key is queued for a future read().
-    fn key_event(&mut self, key: u8) {
+    fn key_event(&mut self, key: Key) {
+        let mut chr = key.chr;
+        if key.is_ctrl() {
+            chr = self.handle_ctrl(key);
+            if chr == 0 {
+                return;
+            }
+        }
+
         // Check for a waiting read().
         if let Some(trans) = &mut self.read {
-            trans.reply_with_payload(1, &key);
+            trans.reply_with_payload(1, &chr);
             self.read = None;
             return;
         }
 
         // Queue the key.
-        self.pending_keys.push(key);
+        self.pending_keys.push(chr);
 
         // Notify a client that has registered for input events.
         if let Some(notify) = &mut self.notify {
@@ -120,6 +129,30 @@ impl SerialServer {
 
             deliver_event(notify.rcvid, &notify.event).unwrap();
             self.notify = None;
+        }
+    }
+
+    /// Handle a key combination that includes control.
+    /// Returns the character that should be sent to the to a reader, or 0 if the key was
+    /// completely consumed by the relevant action.
+    fn handle_ctrl(&mut self, key: Key) -> u8 {
+        if key.chr == b'c' {
+            // Ctrl-C, send SIGINT to the foreground group.
+            self.signal_group(libc::SIGINT);
+            return 0;
+        }
+
+        key.chr
+    }
+
+    /// Send a signal to the foreground group, if any.
+    fn signal_group(&self, signo: i32) {
+        if let Some(job) = &self.job {
+            // Note that PROCMGR_SESSION_SIGNAL_PGRP expects the session ID as the first argument,
+            // not the ID of the foreground group. Procnto is supposed to know which group is the
+            // foreground group, and deliver the signal to it.
+            procmgr_session_ext(job.sid, 0, signo,
+                                libc_missing::PROCMGR_SESSION_SIGNAL_PGRP).unwrap();
         }
     }
 }
@@ -132,6 +165,19 @@ fn deliver_event(rcvid: i64, event: &libc::sigevent) -> Result<(), i32> {
 
     if err != 0 {
         return Err(err);
+    }
+
+    Ok(())
+}
+
+/// Safe wrapper around procmgr_session_ext()
+fn procmgr_session_ext(sid: libc::pid_t, xid: i32, id: i32, event: u32) -> Result<(), i32> {
+    let err = unsafe {
+        libc_missing::procmgr_session_ext(0, sid, xid, id, event)
+    };
+
+    if err != 0 {
+        return Err(unsafe { *libc::__get_errno_ptr() });
     }
 
     Ok(())

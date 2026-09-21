@@ -1,4 +1,4 @@
-use crate::serial::{SerialServer, JobControl};
+use crate::serial::*;
 use crate::qnxmsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::iomsg::DevctlReply;
@@ -270,16 +270,4 @@ impl SerialServer {
         trans.reply(0);
         Ok(())
     }
-}
-
-fn procmgr_session_ext(sid: libc::pid_t, xid: i32, id: i32, event: u32) -> Result<(), i32> {
-    let err = unsafe {
-        libc_missing::procmgr_session_ext(0, sid, xid, id, event)
-    };
-
-    if err != 0 {
-        return Err(err);
-    }
-
-    Ok(())
 }
