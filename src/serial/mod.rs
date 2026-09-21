@@ -2,7 +2,6 @@ mod iomsg;
 mod devctl;
 mod keybuf;
 mod termios;
-pub mod connection;
 
 use crate::libc_missing;
 use crate::qnxmsg::*;
@@ -13,7 +12,6 @@ use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
 use crate::serial::keybuf::KeyBuf;
-use crate::serial::connection::SerialConnection;
 use crate::serial::termios::*;
 use crate::hid::key::Key;
 
@@ -92,8 +90,21 @@ impl SerialServer {
         message_loop(self, self.channel);
     }
 
-    pub fn get_connection(&self) -> SerialConnection {
-        SerialConnection::new(self.channel)
+    pub fn get_channel(&self) -> Channel {
+        self.channel
+    }
+
+    pub fn emit_key_event(channel: &Channel, key: Key) -> Result<(), i32> {
+        let chid = channel.chid;
+        let err = unsafe {
+            libc_missing::MsgSendPulse_r(-chid, -1, 0, key.to_pulse_value())
+        };
+
+        if err != 0 {
+            return Err(err);
+        }
+
+        Ok(())
     }
 
     /// Determine if this device is the controlling terminal for the given session ID.
