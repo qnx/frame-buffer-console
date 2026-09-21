@@ -119,8 +119,9 @@ impl SerialServer {
         // Print the character in ECHO mode.
         if self.attr.echo_on() {
             let str = [chr];
-            let str = std::str::from_utf8(&str).unwrap();
-            self.display.insert_at_cursor(&str);
+            if let Ok(str) = std::str::from_utf8(&str) {
+                self.display.insert_at_cursor(&str);
+            }
         }
 
         // Check for a waiting read().
@@ -151,6 +152,18 @@ impl SerialServer {
         if key.chr == b'c' {
             // Ctrl-C, send SIGINT to the foreground group.
             self.signal_group(libc::SIGINT);
+            return 0;
+        }
+
+        if key.chr == b'd' {
+            // End of transimission.
+            if let Some(trans) = &mut self.read {
+                trans.reply(0);
+                self.read = None;
+            }
+
+            // FIXME:
+            // What if there isn't a waiting client?
             return 0;
         }
 
