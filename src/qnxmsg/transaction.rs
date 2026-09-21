@@ -185,7 +185,7 @@ impl Transaction {
         false
     }
 
-    pub fn session_id(&self) -> (i64, i32) {
+    pub fn connection_id(&self) -> (i64, i32) {
         (self.info.pid64(), self.info.coid)
     }
 

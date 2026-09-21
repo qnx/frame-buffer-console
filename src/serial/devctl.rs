@@ -138,7 +138,7 @@ impl SerialServer {
         // Permissions.
 
         // Both the session ID and the foreground process group are set to the same ID.
-        let (sess_fd_pid, sess_fd_coid) = trans.session_id();
+        let (sess_fd_pid, sess_fd_coid) = trans.connection_id();
         self.job = Some( JobControl { sid, fpgid: sid, sess_fd_pid, sess_fd_coid });
         println!("New session ID {sid}");
         trans.reply(0);

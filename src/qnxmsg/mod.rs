@@ -9,7 +9,7 @@ pub mod iomsg;
 pub mod transaction;
 pub mod readdir;
 pub mod message_loop;
-pub mod session;
+pub mod connection;
 pub mod channel;
 mod msgbuf;
 

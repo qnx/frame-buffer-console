@@ -6,7 +6,7 @@ mod termios;
 use crate::libc_missing;
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
-use crate::qnxmsg::session::SessionTable;
+use crate::qnxmsg::connection::ConnectionTable;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
@@ -19,8 +19,8 @@ use crate::hid::key::Key;
 pub struct SerialServer {
     /// Channel on which to receive messages.
     channel: Channel,
-    /// Table of connected client sessions.
-    session_table: SessionTable<SerialSession>,
+    /// Table of connected client connections.
+    connection_table: ConnectionTable<SerialConnection>,
     /// Display access structure.
     display: Display,
     /// POSIX IDs and file permissions for the device node.
@@ -37,16 +37,14 @@ pub struct SerialServer {
     attr: TerminalAttributes
 }
 
-/// Information for an open session.
-pub struct SerialSession {
+/// Information for an open connection.
+pub struct SerialConnection {
     access: u8
 }
 
 /// Job control data.
 struct JobControl {
-    /// Session ID
-    /// Not to be confused with open file sessions. This is the POSIX job control's notion of a
-    /// session.
+    /// Session ID.
     sid: i32,
     /// Process group ID of the foreground process group.
     fpgid: i32,
@@ -67,7 +65,7 @@ impl SerialServer {
         // Create the server object.
         let server = SerialServer {
             channel: Channel::new(0).unwrap(),
-            session_table: SessionTable::<SerialSession>::new(),
+            connection_table: ConnectionTable::<SerialConnection>::new(),
             display: display.clone(),
             perms: FilePerms::new(0, 0, 0o666),
             job: None,

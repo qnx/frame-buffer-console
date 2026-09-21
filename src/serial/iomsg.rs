@@ -6,13 +6,13 @@ use crate::qnxmsg;
 use crate::qnxmsg::iomsg::*;
 use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::Pulse;
-use crate::serial::{SerialServer, SerialSession, NotifyClient};
+use crate::serial::{SerialServer, SerialConnection, NotifyClient};
 use crate::libc_missing;
 use crate::hid::key::Key;
 
 impl IoMsgImpl for SerialServer {
     /// Handle an _IO_CONNECT message with the _IO_CONNECT_OPEN subtype.
-    /// Prepares a new session.
+    /// Prepares a new connection.
     fn connect(&mut self, msg: &ConnectMsg, _path: &str,
                _extra: &ConnectExtra, trans: &mut Transaction)
                -> Result<(), i32> {
@@ -22,10 +22,10 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EPERM);
         }
 
-        // Add a new session to the table.
-        let session = SerialSession { access };
-        let session = Rc::new(RefCell::new(session));
-        self.session_table.add(trans.session_id(), &session);
+        // Add a new connection to the table.
+        let connection = SerialConnection { access };
+        let connection = Rc::new(RefCell::new(connection));
+        self.connection_table.add(trans.connection_id(), &connection);
         Ok(())
     }
 
@@ -33,13 +33,13 @@ impl IoMsgImpl for SerialServer {
     /// Bytes are parsed and written to the screen.
     fn write(&mut self, _msg: &WriteMsg, data: &str, trans: &mut Transaction)
              -> Result<(), i32> {
-        let session = match self.session_table.get(trans.session_id()) {
+        let connection = match self.connection_table.get(trans.connection_id()) {
             None => { return Err(libc::EBADF); },
             Some(s) => s
         };
 
-        let session = session.borrow();
-        if (session.access & qnxmsg::ACCESS_WRITE) == 0 {
+        let connection = connection.borrow();
+        if (connection.access & qnxmsg::ACCESS_WRITE) == 0 {
             return Err(libc::EACCES);
         }
 
@@ -51,14 +51,14 @@ impl IoMsgImpl for SerialServer {
     /// Handle an _IO_READ message.
     fn read(&mut self, msg: &ReadMsg, trans: &mut Transaction)
             -> Result<(), i32> {
-        let session = match self.session_table.get(trans.session_id()) {
+        let connection = match self.connection_table.get(trans.connection_id()) {
             None => { return Err(libc::EBADF); },
             Some(s) => s
         };
 
         // Check for read permission.
-        let session = session.borrow();
-        if (session.access & qnxmsg::ACCESS_READ) == 0 {
+        let connection = connection.borrow();
+        if (connection.access & qnxmsg::ACCESS_READ) == 0 {
             return Err(libc::EACCES);
         }
 
@@ -97,7 +97,7 @@ impl IoMsgImpl for SerialServer {
     /// Handle an _IO_STAT message.
     fn stat(&mut self, _msg: &StatMsg, trans: &mut Transaction)
             -> Result<(), i32> {
-        if self.session_table.get(trans.session_id()).is_none() {
+        if self.connection_table.get(trans.connection_id()).is_none() {
             return Err(libc::EBADF);
         }
 
@@ -129,8 +129,8 @@ impl IoMsgImpl for SerialServer {
     /// Handle an _IO_DUP message.
     fn dup(&mut self, msg: &DupMsg, trans: &mut Transaction)
            -> Result<(), i32> {
-        // Get the session object for the duplicated fd.
-        let session_ref = match self.session_table.get((msg.pid as i64, msg.coid)) {
+        // Get the connection object for the duplicated fd.
+        let connection_ref = match self.connection_table.get((msg.pid as i64, msg.coid)) {
             None => { return Err(libc::EBADF); },
             Some(s) => s
         };
@@ -138,10 +138,10 @@ impl IoMsgImpl for SerialServer {
         // FIXME:
         // Permission checks for cross-process.
 
-        // Add a reference to the same session to the session table for the
+        // Add a reference to the same connection to the connection table for the
         // current fd.
-        let session_ref = session_ref.clone();
-        self.session_table.add(trans.session_id(), &session_ref);
+        let connection_ref = connection_ref.clone();
+        self.connection_table.add(trans.connection_id(), &connection_ref);
         trans.reply(0);
         Ok(())
     }
@@ -149,12 +149,12 @@ impl IoMsgImpl for SerialServer {
     /// Handle an _IO_DEVCTL message.
     fn devctl(&mut self, msg: &DevctlMsg, payload: &[u8], trans: &mut Transaction)
             -> Result<(), i32> {
-        let session = match self.session_table.get(trans.session_id()) {
+        let connection = match self.connection_table.get(trans.connection_id()) {
             None => { return Err(libc::EBADF); },
             Some(s) => s
         };
 
-        let access = session.borrow().access;
+        let access = connection.borrow().access;
         self.devctl(msg.dcmd, payload, access, trans)
     }
 
@@ -165,9 +165,9 @@ impl IoMsgImpl for SerialServer {
     /// granted access to the original descriptor.
     fn openfd(&mut self, msg: &OpenfdMsg, trans: &mut Transaction)
               -> Result<(), i32> {
-        // Current fd should not be associated with a session (i.e., should not have been opened
+        // Current fd should not be associated with a connection (i.e., should not have been opened
         // previously).
-        if self.session_table.get(trans.session_id()).is_some() {
+        if self.connection_table.get(trans.connection_id()).is_some() {
             return Err(libc::EBUSY);
         };
 
@@ -200,10 +200,10 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EPERM);
         }
 
-        // Add a new session to the table.
-        let session = SerialSession { access };
-        let session = Rc::new(RefCell::new(session));
-        self.session_table.add(trans.session_id(), &session);
+        // Add a new connection to the table.
+        let connection = SerialConnection { access };
+        let connection = Rc::new(RefCell::new(connection));
+        self.connection_table.add(trans.connection_id(), &connection);
         trans.reply(0);
         Ok(())
     }
@@ -262,13 +262,13 @@ impl IoMsgImpl for SerialServer {
 
     /// Handle an _IO_CLOSE message.
     fn close(&mut self, trans: &Transaction) -> Result<(), i32> {
-        match self.session_table.remove(trans.session_id()) {
+        match self.connection_table.remove(trans.connection_id()) {
             Some(_) => {
                 if let Some(job) = &mut self.job {
-                    // Determine if the close comes from the fd that registered the session.
-                    let (pid, coid) = trans.session_id();
+                    // Determine if the close comes from the fd that registered the connection.
+                    let (pid, coid) = trans.connection_id();
                     if (job.sess_fd_pid == pid) && (job.sess_fd_coid == coid) {
-                        // Session closed.
+                        // Connection closed.
                         println!("Session closed");
                         self.job = None;
                     }
