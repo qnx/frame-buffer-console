@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-libc = { git = "ssh://git@gitlab.rim.net:/qnx/products/tools/rust/libc.git", branch = "qnx/main" }
+#libc = { git = "ssh://git@gitlab.rim.net:/qnx/products/tools/rust/libc.git", branch = "qnx/main" }
+libc = "0.2"

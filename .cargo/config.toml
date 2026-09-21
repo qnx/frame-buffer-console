@@ -1,2 +1,2 @@
 [build]
-target = ["aarch64-unknown-nto-qnx800", "x86_64-pc-nto-qnx800"]
+target = ["aarch64-unknown-qnx", "x86_64-pc-qnx"]

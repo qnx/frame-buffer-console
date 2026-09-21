@@ -4,8 +4,9 @@ version = 4
 
 [[package]]
 name = "libc"
-version = "0.2.169"
-source = "git+ssh://git@gitlab.rim.net/qnx/products/tools/rust/libc.git?branch=qnx%2Fmain#baea6d19410175b650dbdaa9271c05f00b3a1780"
+version = "0.2.189"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "uefi-console"

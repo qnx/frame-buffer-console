@@ -1,6 +1,7 @@
 use crate::qnxmsg::MsgInfo;
 use crate::qnxmsg::Pulse;
 use crate::qnxmsg::msgbuf::MsgBuf;
+use crate::libc_missing;
 
 /// Channel object.
 #[derive(Clone,Copy)]
@@ -32,9 +33,9 @@ impl Channel {
             let info_ptr = std::ptr::addr_of!(*info)
                 as *mut libc::_msg_info64;
 
-            libc::MsgReceive_r(self.chid, buf_ptr,
-                               std::mem::size_of::<MsgBuf>(),
-                               info_ptr)
+            libc_missing::MsgReceive_r(self.chid, buf_ptr,
+                                       std::mem::size_of::<MsgBuf>(),
+                                       info_ptr)
         };
 
         if rcvid < 0 {

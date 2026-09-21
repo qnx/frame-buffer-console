@@ -36,4 +36,13 @@ unsafe extern "C" {
 
     pub fn procmgr_session_ext(reserved: u32, sid: libc::pid_t, xid: i32, id: i32, event: u32) ->
         i32;
+
+    // The following are in the C library crate, but use the wrong type for receive IDs.
+    pub fn MsgReceive_r(chid: i32, msg: *mut libc::c_void, bytes: usize,
+                        info: *mut libc::_msg_info64) -> i64;
+    pub fn MsgReply(rcvid: i64, status: i64, msg: *const libc::c_void, bytes: usize) -> i32;
+    pub fn MsgError(rcvid: i64, err: i32) -> i32;
+    pub fn MsgDeliverEvent_r(rcvid: i64, event: *const libc::sigevent) -> i32;
+    pub fn MsgSendPulse_r(coid: i32, priority: i32, code: i32, value: i64)
+                          -> i32;
 }

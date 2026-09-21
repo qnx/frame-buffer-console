@@ -185,7 +185,7 @@ impl SerialServer {
 /// Safe wrapper around MsgDeliverEvent_r().
 fn deliver_event(rcvid: i64, event: &libc::sigevent) -> Result<(), i32> {
     let err = unsafe {
-        libc::MsgDeliverEvent_r(rcvid, event as *const libc::sigevent)
+        libc_missing::MsgDeliverEvent_r(rcvid, event as *const libc::sigevent)
     };
 
     if err != 0 {

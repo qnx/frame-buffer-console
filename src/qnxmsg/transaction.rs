@@ -89,7 +89,7 @@ impl Transaction {
                     size: usize) {
         // Invoke the kernel call.
         unsafe {
-            libc::MsgReply(self.rcvid, status, ptr, size);
+            libc_missing::MsgReply(self.rcvid, status, ptr, size);
         };
 
         // Update transaction state.
@@ -101,7 +101,7 @@ impl Transaction {
         assert_eq!(self.state, State::Pending);
 
         unsafe {
-            libc::MsgError(self.rcvid, error);
+            libc_missing::MsgError(self.rcvid, error);
         };
 
         self.state = State::Error;
