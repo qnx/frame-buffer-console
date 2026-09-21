@@ -1,6 +1,7 @@
 mod iomsg;
 mod devctl;
 mod keybuf;
+mod termios;
 pub mod connection;
 
 use crate::libc_missing;
@@ -13,6 +14,7 @@ use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
 use crate::serial::keybuf::KeyBuf;
 use crate::serial::connection::SerialConnection;
+use crate::serial::termios::*;
 use crate::hid::key::Key;
 
 /// Main server structure.
@@ -32,7 +34,9 @@ pub struct SerialServer {
     /// Read transaction waiting for a reply.
     read: Option<Transaction>,
     /// A client event to emit when input is available.
-    notify: Option<NotifyClient>
+    notify: Option<NotifyClient>,
+    /// Terminal attributes
+    attr: TerminalAttributes
 }
 
 /// Information for an open session.
@@ -71,7 +75,8 @@ impl SerialServer {
             job: None,
             pending_keys: KeyBuf::new(),
             read: None,
-            notify: None
+            notify: None,
+            attr: TerminalAttributes::new()
         };
 
         // Attach to the mount point.
@@ -109,6 +114,13 @@ impl SerialServer {
             if chr == 0 {
                 return;
             }
+        }
+
+        // Print the character in ECHO mode.
+        if self.attr.echo_on() {
+            let str = [chr];
+            let str = std::str::from_utf8(&str).unwrap();
+            self.display.insert_at_cursor(&str);
         }
 
         // Check for a waiting read().

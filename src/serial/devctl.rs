@@ -14,13 +14,6 @@ const DCMD_CHR_TCSETATTRD : u32 = 0x804c7415;
 const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
 const DCMD_CHR_TCSETSIZE : u32 = 0x80087467;
 
-const EDIT_CFLAG: u32 = libc::CREAD | libc::CS8 | libc::HUPCL | libc::CLOCAL;
-const EDIT_IFLAG: u32 = libc::IMAXBEL | libc::INPCK | libc::BRKINT | libc::ICRNL | libc::IXON |
-                        libc::IXOFF;
-const EDIT_LFLAG: u32 = libc::ECHO | libc::ECHOCTL | libc::ECHOE | libc::ECHOK | libc::ECHONL |
-                        libc::ECHOKE | libc::ICANON | libc::ISIG | libc::IEXTEN;
-const EDIT_OFLAG: u32 = libc::ONLCR | libc::OPOST;
-
 #[repr(C, packed)]
 struct GetflagsReply {
     hdr: DevctlReply,
@@ -199,13 +192,7 @@ impl SerialServer {
     /// Get tarminal attributes.
     fn tcgetattr(&mut self, trans: &mut Transaction) -> Result<(), i32> {
         // These values are based on those provided by devc-con-hid.
-        let mut attr: libc::termios = unsafe { std::mem::zeroed() };
-        attr.c_iflag = EDIT_IFLAG;
-        attr.c_oflag = EDIT_OFLAG;
-        attr.c_cflag = EDIT_CFLAG;
-        attr.c_lflag = EDIT_LFLAG;
-        attr.c_ispeed = 100000;
-        attr.c_ospeed = 100000;
+        let attr = self.attr.as_termios();
 
         let reply = TcgetattrReply {
             hdr: DevctlReply::new::<libc::termios>(0),
@@ -222,14 +209,16 @@ impl SerialServer {
             return Err(libc::ENOTTY);
         }
 
-        let _attr = match transmute_payload::<libc::termios>(payload) {
+        let attr = match transmute_payload::<libc::termios>(payload) {
             Ok(attr) => attr,
             Err(_) => { return Err(libc::EBADMSG); }
         };
 
-        // FIXME:
-        // Apply attributes.
-
+        // Apply new attributes.
+        self.attr.input = attr.c_iflag;
+        self.attr.output = attr.c_oflag;
+        self.attr.control = attr.c_cflag;
+        self.attr.local = attr.c_lflag;
         trans.reply(0);
         Ok(())
     }
