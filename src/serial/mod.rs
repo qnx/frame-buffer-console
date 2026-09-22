@@ -13,7 +13,7 @@ use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
 use crate::serial::keybuf::KeyBuf;
 use crate::serial::termios::*;
-use crate::hid::key::Key;
+use crate::hid::key::*;
 
 /// Main server structure.
 pub struct SerialServer {
@@ -117,12 +117,15 @@ impl SerialServer {
     /// If a client is waiting on a read request, the key is used in a reply to the client.
     /// Otherwise, the key is queued for a future read().
     fn key_event(&mut self, key: Key) {
-        let mut chr = key.chr;
+        let chr = key.chr;
         if key.is_ctrl() {
-            chr = self.handle_ctrl(key);
-            if chr == 0 {
-                return;
-            }
+            self.handle_ctrl(key);
+            return;
+        }
+
+        if key.is_special() {
+            self.handle_special(key);
+            return;
         }
 
         // Print the character in ECHO mode.
@@ -155,16 +158,11 @@ impl SerialServer {
     }
 
     /// Handle a key combination that includes control.
-    /// Returns the character that should be sent to the to a reader, or 0 if the key was
-    /// completely consumed by the relevant action.
-    fn handle_ctrl(&mut self, key: Key) -> u8 {
+    fn handle_ctrl(&mut self, key: Key) {
         if key.chr == b'c' {
             // Ctrl-C, send SIGINT to the foreground group.
             self.signal_group(libc::SIGINT);
-            return 0;
-        }
-
-        if key.chr == b'd' {
+        } else if key.chr == b'd' {
             // End of transimission.
             if let Some(trans) = &mut self.read {
                 trans.reply(0);
@@ -173,10 +171,12 @@ impl SerialServer {
 
             // FIXME:
             // What if there isn't a waiting client?
-            return 0;
         }
+    }
 
-        key.chr
+    fn handle_special(&mut self, key: Key) {
+        if key.chr == KEY_LEFT_ARROW {
+        }
     }
 
     /// Send a signal to the foreground group, if any.
