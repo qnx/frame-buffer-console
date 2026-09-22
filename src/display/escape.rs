@@ -1,7 +1,6 @@
 /// Escape sequence parser.
 
 use std::str::Chars;
-use crate::display::cursor::CursorDir;
 
 pub struct Escape {
     /// Parser state.
@@ -10,12 +9,25 @@ pub struct Escape {
     params: Vec<u32>,
     /// Number of characters consumed (0 on parse error).
     pub len: usize,
-    /// Resulting attributes to apply, 0 to reset, None if no attribute was parsed.
-    pub attr: Option<u8>,
-    /// Resulting character to display or None to display nothing.
-    pub chr: Option<u8>,
-    /// Direction of cursor movement.
-    pub cursor: Option<CursorDir>
+    /// Parsing result.
+    pub result: EscapeResult
+}
+
+pub enum EscapeResult {
+    /// Parsing failed.
+    None,
+    /// Select Graphic Rendition.
+    SGR(u8),
+    /// Cursor left.
+    CUB(u32),
+    /// Cursor down.
+    CUD(u32),
+    /// Cursor right.
+    CUF(u32),
+    /// Cursor up.
+    CUU(u32),
+    /// Delete character.
+    DCH(u32)
 }
 
 #[derive(Debug, PartialEq)]
@@ -29,15 +41,14 @@ enum State {
 
 impl Escape {
     pub fn new() -> Self {
-        Escape { state: State::Init, len: 0, chr: Some(b'\\'), attr: None,
-                 params: Vec::<u32>::new(), cursor: None }
+        Escape { state: State::Init, params: Vec::<u32>::new(), len: 0,
+                 result: EscapeResult::None }
     }
 
     pub fn reset(&mut self) {
         self.state = State::Init;
         self.len = 0;
-        self.attr = None;
-        self.chr = Some(b'\\');
+        self.result = EscapeResult::None;
         self.params.clear();
     }
 
@@ -117,20 +128,20 @@ impl Escape {
             // Check for end of parsing.
             if self.state == State::Done {
                 // Process sequence based on the final character.
-                match final_char {
+                self.result = match final_char {
                     b'm' => self.sgr_to_attr(),
-                    b'C' => self.cursor = Some(CursorDir::Forward),
-                    b'D' => self.cursor = Some(CursorDir::Back),
-                    _ => {}
-                }
+                    b'C' => EscapeResult::CUF(self.param(1)),
+                    b'D' => EscapeResult::CUB(self.param(1)),
+                    b'P' => EscapeResult::DCH(self.param(1)),
+                    _ => EscapeResult::None
+                };
 
-                self.chr = None;
                 return;
             }
         }
     }
 
-    fn sgr_to_attr(&mut self) {
+    fn sgr_to_attr(&self) -> EscapeResult {
         let mut attr: u8 = 0;
         for i in 0..self.params.len() {
             let param = self.params[i];
@@ -152,6 +163,14 @@ impl Escape {
             }
         }
 
-        self.attr = Some(attr);
+        EscapeResult::SGR(attr)
+    }
+
+    fn param(&mut self, default: u32) -> u32 {
+        if self.params.len() > 0 {
+            self.params[0]
+        } else {
+            default
+        }
     }
 }

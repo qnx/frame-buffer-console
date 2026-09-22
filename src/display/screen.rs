@@ -2,7 +2,7 @@
 
 use crate::display::{Rect, ScreenChar};
 use crate::display::font::Font;
-use crate::display::escape::Escape;
+use crate::display::escape::*;
 use crate::display::cursor::*;
 
 pub struct Screen {
@@ -121,7 +121,7 @@ impl Screen {
             match chr {
                 b'\n' => self.insert_newline(&mut insert),
                 0x07 => self.bell(),
-                0x08 => self.move_to(CursorDir::Back, &mut insert),
+                0x08 => self.move_to(CursorDir::Back, 1, &mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
                 b'\r' => {}, // FIXME: anything to do here?
                 _ => self.insert_char(chr, &mut insert)
@@ -181,24 +181,22 @@ impl Screen {
     /// Handle a potential escape sequence.
     /// The function is called when the ESC character is encouneted in a stream.
     fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::str::Chars<'_>) {
+        // Parse the escape sequence.
         self.esc.parse(iter.clone());
 
-        // Update attributes, if required.
-        if let Some(attr) = self.esc.attr {
-            if attr == 0 {
-                self.attr = self.default_attr;
-            } else {
-                self.attr = attr;
+        // Act on the result.
+        match self.esc.result {
+            EscapeResult::SGR(attr) => {
+                if attr == 0 {
+                    self.attr = self.default_attr;
+                } else {
+                    self.attr = attr;
+                }
             }
-        }
-
-        // Insert a character, if required.
-        if let Some(chr) = self.esc.chr {
-            self.insert_char(chr, insert);
-        }
-
-        if let Some(dir) = self.esc.cursor {
-            self.move_to(dir, insert);
+            EscapeResult::CUB(n) => self.move_to(CursorDir::Left, n, insert),
+            EscapeResult::CUF(n) => self.move_to(CursorDir::Right, n, insert),
+            EscapeResult::DCH(n) => self.delete(n, insert),
+            _ => {}
         }
 
         // Advance the iterator to after the escape sequence.
@@ -210,7 +208,7 @@ impl Screen {
     }
 
     /// Update the insertion position based on the given direction.
-    fn move_to(&self, dir: CursorDir, insert: &mut Insert) {
+    fn move_to(&self, dir: CursorDir, _num: u32, insert: &mut Insert) {
         let (mut col, mut row, mut idx) = (insert.col, insert.row, insert.bufidx);
         match dir {
             CursorDir::Forward => {
@@ -243,6 +241,17 @@ impl Screen {
         insert.col = col;
         insert.row = row;
         insert.bufidx = idx;
+    }
+
+    /// Delete num characters from the current position.
+    fn delete(&mut self, num: u32, insert: &mut Insert) {
+        for i in 0..num as usize {
+            if (insert.bufidx + i) == self.buffer.len() {
+                break;
+            }
+
+            self.buffer[insert.bufidx + i] = BLANK_CHAR;
+        }
     }
 
     fn check_scroll(&mut self, insert: &mut Insert) {
