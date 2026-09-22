@@ -1,7 +1,13 @@
 use crate::qnxmsg::Pulse;
 
-pub const MOD_CTRL: u8 = 1;
-pub const MOD_ALT: u8 = 2;
+pub const MOD_CTRL: u8 = 0x01;
+pub const MOD_ALT: u8 = 0x02;
+pub const MOD_SPECIAL: u8 = 0x04;
+
+pub const KEY_LEFT_ARROW: u8 = 1;
+pub const KEY_RIGHT_ARROW: u8 = 2;
+pub const KEY_UP_ARROW: u8 = 3;
+pub const KEY_DOWN_ARROW: u8 = 4;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Key {
@@ -22,5 +28,9 @@ impl Key {
 
     pub fn is_ctrl(&self) -> bool {
         (self.modifier & MOD_CTRL) != 0
+    }
+
+    pub fn is_special(&self) -> bool {
+        (self.modifier & MOD_SPECIAL) != 0
     }
 }
