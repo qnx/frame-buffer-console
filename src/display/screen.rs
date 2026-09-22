@@ -1,8 +1,9 @@
 /// The logical contents of the screen
 
-use crate::display::{Rect, ScreenChar, Cursor};
+use crate::display::{Rect, ScreenChar};
 use crate::display::font::Font;
 use crate::display::escape::Escape;
+use crate::display::cursor::*;
 
 pub struct Screen {
     /// Screen contents (character and attrbitute for each position).
@@ -213,12 +214,36 @@ impl Screen {
             self.insert_char(chr, insert);
         }
 
+        if let Some(dir) = self.esc.cursor {
+            self.move_to(dir, insert);
+        }
+
         // Advance the iterator to after the escape sequence.
         for _ in 0..self.esc.len {
             iter.next();
         }
 
         self.esc.reset();
+    }
+
+    /// Update the insertion position based on the given direction.
+    fn move_to(&self, dir: CursorDir, insert: &mut Insert) {
+        let (mut col, mut row) = (insert.col, insert.row);
+        match dir {
+            CursorDir::Forward => {
+                col += 1;
+                if col == self.columns {
+                    if row < self.rows {
+                        col = 0;
+                        row += 1;
+                    }
+                }
+            }
+            _ => {} // FIXME: handle more directions.
+        };
+
+        insert.col = col;
+        insert.row = row;
     }
 
     fn check_scroll(&mut self, insert: &mut Insert) {

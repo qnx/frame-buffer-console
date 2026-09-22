@@ -1,6 +1,7 @@
 /// Escape sequence parser.
 
 use std::str::Chars;
+use crate::display::cursor::CursorDir;
 
 pub struct Escape {
     /// Parser state.
@@ -12,7 +13,9 @@ pub struct Escape {
     /// Resulting attributes to apply, 0 to reset, None if no attribute was parsed.
     pub attr: Option<u8>,
     /// Resulting character to display or None to display nothing.
-    pub chr: Option<u8>
+    pub chr: Option<u8>,
+    /// Direction of cursor movement.
+    pub cursor: Option<CursorDir>
 }
 
 #[derive(Debug, PartialEq)]
@@ -27,7 +30,7 @@ enum State {
 impl Escape {
     pub fn new() -> Self {
         Escape { state: State::Init, len: 0, chr: Some(b'\\'), attr: None,
-                 params: Vec::<u32>::new() }
+                 params: Vec::<u32>::new(), cursor: None }
     }
 
     pub fn reset(&mut self) {
@@ -114,8 +117,11 @@ impl Escape {
             // Check for end of parsing.
             if self.state == State::Done {
                 // Process sequence based on the final character.
-                if final_char == b'm' {
-                    self.sgr_to_attr();
+                match final_char {
+                    b'm' => self.sgr_to_attr(),
+                    b'C' => self.cursor = Some(CursorDir::Forward),
+                    b'D' => self.cursor = Some(CursorDir::Back),
+                    _ => {}
                 }
 
                 self.chr = None;
