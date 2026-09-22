@@ -1,14 +1,7 @@
 use crate::qnxmsg::Pulse;
 
-pub const MOD_LSHIFT: u8 = 0x02;
-pub const MOD_RSHIFT: u8 = 0x20;
-pub const MOD_SHIFT: u8 = MOD_LSHIFT | MOD_RSHIFT;
-pub const MOD_LCTRL: u8 = 0x01;
-pub const MOD_RCTRL: u8 = 0x10;
-pub const MOD_CTRL: u8 = MOD_LCTRL | MOD_RCTRL;
-pub const MOD_LALT: u8 = 0x04;
-pub const MOD_RALT: u8 = 0x40;
-pub const MOD_ALT: u8 = MOD_LALT | MOD_RALT;
+pub const MOD_CTRL: u8 = 1;
+pub const MOD_ALT: u8 = 2;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Key {

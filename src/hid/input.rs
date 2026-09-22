@@ -45,6 +45,16 @@ impl InputReport {
     }
 }
 
+const HID_MOD_LSHIFT: u8 = 0x02;
+const HID_MOD_RSHIFT: u8 = 0x20;
+const HID_MOD_SHIFT: u8 = HID_MOD_LSHIFT | HID_MOD_RSHIFT;
+const HID_MOD_LCTRL: u8 = 0x01;
+const HID_MOD_RCTRL: u8 = 0x10;
+const HID_MOD_CTRL: u8 = HID_MOD_LCTRL | HID_MOD_RCTRL;
+const HID_MOD_LALT: u8 = 0x04;
+const HID_MOD_RALT: u8 = 0x40;
+const HID_MOD_ALT: u8 = HID_MOD_LALT | HID_MOD_RALT;
+
 const KEY_USAGE_TABLE: [(u8, u8); 57] = [
     (0, 0),
     (0, 0),
@@ -110,15 +120,14 @@ fn translate_key(data: &[u8]) -> Option<Key> {
     // Translate modifiers.
     // This gets rid of the distinction between left and right versions, as well as shift (the
     // impact of shift is folded into the character).
-    let mut modifier = data[0];
-    let is_shift = modifier & MOD_SHIFT != 0;
-    modifier &= !MOD_SHIFT;
+    let mut modifier = 0;
+    let is_shift = data[0] & HID_MOD_SHIFT != 0;
 
-    if modifier & MOD_ALT != 0 {
+    if data[0] & HID_MOD_ALT != 0 {
         modifier |= MOD_ALT;
     }
 
-    if modifier & MOD_CTRL != 0 {
+    if data[0] & HID_MOD_CTRL != 0 {
         modifier |= MOD_CTRL;
     }
 
