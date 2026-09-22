@@ -158,7 +158,12 @@ impl SerialServer {
     }
 
     fn handle_special(&mut self, key: Key) {
-        if key.chr == KEY_LEFT_ARROW {
+        match key.chr {
+            KEY_LEFT_ARROW => self.data_available(&[0x1b, b'[', b'D']),
+            KEY_RIGHT_ARROW => self.data_available(&[0x1b, b'[', b'C']),
+            KEY_UP_ARROW => self.data_available(&[0x1b, b'[', b'A']),
+            KEY_DOWN_ARROW => self.data_available(&[0x1b, b'[', b'B']),
+            _ => {}
         }
     }
 
