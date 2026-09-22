@@ -185,7 +185,7 @@ impl SerialServer {
         }
 
         // Queue the remaining data.
-        self.input_buffer.push(chrs[pos]);
+        self.input_buffer.push(&chrs[pos..]);
 
         // Notify a client that has registered for input events.
         if let Some(notify) = &mut self.notify {

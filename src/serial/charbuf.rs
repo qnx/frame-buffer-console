@@ -13,16 +13,16 @@ impl CharBuf {
         CharBuf { chars: [0; CHAR_BUF_SIZE], head: 0, tail: 0, count: 0 }
     }
 
-    /// Add a char to the buffer.
-    /// The char is silently dropped if the buffer is full.
-    pub fn push(&mut self, char: u8) {
-        if self.count == CHAR_BUF_SIZE {
-            return;
+    /// Add characters to the buffer.
+    /// Characters are silently dropped if the buffer is full.
+    pub fn push(&mut self, chars: &[u8]) {
+        let room = CHAR_BUF_SIZE - self.count;
+        let len = std::cmp::min(chars.len(), room);
+        for chr in &chars[0..len] {
+            self.chars[self.tail] = *chr;
+            self.tail = (self.tail + 1) % CHAR_BUF_SIZE;
+            self.count += 1;
         }
-
-        self.chars[self.tail] = char;
-        self.tail = (self.tail + 1) % CHAR_BUF_SIZE;
-        self.count += 1;
     }
 
     /// Get a view into the circular buffer.
