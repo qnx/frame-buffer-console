@@ -106,7 +106,6 @@ impl Screen {
     }
 
     pub fn insert_at_cursor(&mut self, chrs: &str) {
-        println!("{:?}", chrs.as_bytes());
         // Mark starting position.
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
         let mut iter = chrs.chars();
@@ -122,7 +121,7 @@ impl Screen {
             match chr {
                 b'\n' => self.insert_newline(&mut insert),
                 0x07 => self.bell(),
-                0x08 => self.backspace(&mut insert),
+                0x08 => self.move_to(CursorDir::Back, &mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
                 b'\r' => {}, // FIXME: anything to do here?
                 _ => self.insert_char(chr, &mut insert)
@@ -175,22 +174,6 @@ impl Screen {
         insert.row += 1;
     }
 
-    fn backspace(&mut self, insert: &mut Insert) {
-        // Move the insertion position backwards.
-        if insert.col > 0 {
-            insert.col -= 1;
-        } else if insert.row > 0 {
-            insert.col = 0;
-            insert.row -= 1;
-        } else {
-            // At the beginning of the screen, cannot go backwards.
-            return;
-        }
-
-        insert.bufidx -= 1;
-        self.buffer[insert.bufidx] = BLANK_CHAR;
-    }
-
     fn bell(&mut self) {
         // Do nothing for now.
     }
@@ -228,15 +211,30 @@ impl Screen {
 
     /// Update the insertion position based on the given direction.
     fn move_to(&self, dir: CursorDir, insert: &mut Insert) {
-        let (mut col, mut row) = (insert.col, insert.row);
+        let (mut col, mut row, mut idx) = (insert.col, insert.row, insert.bufidx);
         match dir {
             CursorDir::Forward => {
-                col += 1;
-                if col == self.columns {
+                if col == self.columns - 1 {
                     if row < self.rows {
                         col = 0;
                         row += 1;
+                        idx += 1;
                     }
+                } else {
+                    col += 1;
+                    idx += 1;
+                }
+            }
+            CursorDir::Back => {
+                if col == 0 {
+                    if row > 0 {
+                        col = self.columns - 1;
+                        row -= 1;
+                        idx -= 1;
+                    }
+                } else {
+                    col -= 1;
+                    idx -= 1;
                 }
             }
             _ => {} // FIXME: handle more directions.
@@ -244,6 +242,7 @@ impl Screen {
 
         insert.col = col;
         insert.row = row;
+        insert.bufidx = idx;
     }
 
     fn check_scroll(&mut self, insert: &mut Insert) {
