@@ -167,14 +167,25 @@ impl SerialServer {
     /// is stored in the input buffer for future reads.
     fn data_available(&mut self, chrs: &[u8]) {
         // Check for a waiting read().
+        let mut len = chrs.len();
+        let mut pos = 0;
         if let Some(trans) = &mut self.read {
-            trans.reply_with_payload_and_size(1, chrs, 1);
+            // Reply to the client with as many bytes as it requested.
+            assert!(self.input_buffer.is_empty());
+            let reply_len = std::cmp::min(len, trans.get_reply_size());
+            trans.reply_with_payload_and_size(reply_len as i64, chrs, reply_len);
             self.read = None;
-            return;
+
+            len -= reply_len;
+            if len == 0 {
+                return;
+            }
+
+            pos += reply_len;
         }
 
-        // Queue the key.
-        self.input_buffer.push(chrs[0]);
+        // Queue the remaining data.
+        self.input_buffer.push(chrs[pos]);
 
         // Notify a client that has registered for input events.
         if let Some(notify) = &mut self.notify {

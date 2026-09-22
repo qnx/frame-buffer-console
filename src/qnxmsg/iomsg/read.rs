@@ -13,6 +13,13 @@ where ServerT: IoMsgImpl
         Err(err) => { trans.error(err); return; }
     };
 
+    // Remember the number of bytes the client is expecting in response, if it is smaller than the
+    // reply buffer's size.
+    let max_reply_size = read_msg.nbytes as u64;
+    if max_reply_size < trans.info.dstmsglen {
+        trans.info.dstmsglen = max_reply_size;
+    }
+
     if let Err(err) = server.read(read_msg, trans) {
         trans.error(err);
     }

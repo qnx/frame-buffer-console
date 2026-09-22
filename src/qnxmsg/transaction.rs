@@ -54,6 +54,10 @@ impl Transaction {
         self.rcvid
     }
 
+    pub fn get_reply_size(&self) -> usize {
+        self.info.dstmsglen as usize
+    }
+
     /// Reply to a message with a status.
     pub fn reply(&mut self, status: i64) {
         assert_eq!(self.state, State::Pending);
