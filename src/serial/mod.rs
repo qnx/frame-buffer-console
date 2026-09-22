@@ -136,25 +136,8 @@ impl SerialServer {
             }
         }
 
-        // Check for a waiting read().
-        if let Some(trans) = &mut self.read {
-            trans.reply_with_payload(1, &chr);
-            self.read = None;
-            return;
-        }
-
-        // Queue the key.
-        self.input_buffer.push(chr);
-
-        // Notify a client that has registered for input events.
-        if let Some(notify) = &mut self.notify {
-            let mut value = notify.event.sigev_value.sival_ptr as u64;
-            value |= libc_missing::_NOTIFY_COND_INPUT as u64;
-            notify.event.sigev_value.sival_ptr = value as *mut libc::c_void;
-
-            deliver_event(notify.rcvid, &notify.event).unwrap();
-            self.notify = None;
-        }
+        let chrs: [u8; 1] = [chr];
+        self.data_available(&chrs);
     }
 
     /// Handle a key combination that includes control.
@@ -176,6 +159,31 @@ impl SerialServer {
 
     fn handle_special(&mut self, key: Key) {
         if key.chr == KEY_LEFT_ARROW {
+        }
+    }
+
+    /// Called when new data is ready to be read from the device.
+    /// If there is a pending read transaction, the transaction is replied to. Any remaining data
+    /// is stored in the input buffer for future reads.
+    fn data_available(&mut self, chrs: &[u8]) {
+        // Check for a waiting read().
+        if let Some(trans) = &mut self.read {
+            trans.reply_with_payload_and_size(1, chrs, 1);
+            self.read = None;
+            return;
+        }
+
+        // Queue the key.
+        self.input_buffer.push(chrs[0]);
+
+        // Notify a client that has registered for input events.
+        if let Some(notify) = &mut self.notify {
+            let mut value = notify.event.sigev_value.sival_ptr as u64;
+            value |= libc_missing::_NOTIFY_COND_INPUT as u64;
+            notify.event.sigev_value.sival_ptr = value as *mut libc::c_void;
+
+            deliver_event(notify.rcvid, &notify.event).unwrap();
+            self.notify = None;
         }
     }
 
