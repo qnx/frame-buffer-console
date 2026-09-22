@@ -1,6 +1,6 @@
 mod iomsg;
 mod devctl;
-mod keybuf;
+mod charbuf;
 mod termios;
 
 use crate::libc_missing;
@@ -11,7 +11,7 @@ use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
-use crate::serial::keybuf::KeyBuf;
+use crate::serial::charbuf::CharBuf;
 use crate::serial::termios::*;
 use crate::hid::key::*;
 
@@ -27,8 +27,8 @@ pub struct SerialServer {
     perms: FilePerms,
     /// Job control data.
     job: Option<JobControl>,
-    /// Key events that have not been read.
-    pending_keys: KeyBuf,
+    /// Characters that have not been read.
+    input_buffer: CharBuf,
     /// Read transaction waiting for a reply.
     read: Option<Transaction>,
     /// A client event to emit when input is available.
@@ -69,7 +69,7 @@ impl SerialServer {
             display: display.clone(),
             perms: FilePerms::new(0, 0, 0o666),
             job: None,
-            pending_keys: KeyBuf::new(),
+            input_buffer: CharBuf::new(),
             read: None,
             notify: None,
             attr: TerminalAttributes::new()
@@ -144,7 +144,7 @@ impl SerialServer {
         }
 
         // Queue the key.
-        self.pending_keys.push(chr);
+        self.input_buffer.push(chr);
 
         // Notify a client that has registered for input events.
         if let Some(notify) = &mut self.notify {

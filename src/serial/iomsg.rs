@@ -82,15 +82,15 @@ impl IoMsgImpl for SerialServer {
 
         // If there are no pending keys, then remember the transaction so that it can be replied to
         // once a key event occurs.
-        if self.pending_keys.is_empty() {
+        if self.input_buffer.is_empty() {
             self.read = Some(trans.reply_later());
             return Ok(());
         }
 
         // Reply with pending keys.
-        let (data, len) = self.pending_keys.get_data(msg.nbytes as usize);
+        let (data, len) = self.input_buffer.get_data(msg.nbytes as usize);
         trans.reply_with_payload_and_size(len as i64, data, len);
-        self.pending_keys.pop(len);
+        self.input_buffer.pop(len);
         Ok(())
     }
 
@@ -248,7 +248,7 @@ impl IoMsgImpl for SerialServer {
             flags: 0
         };
 
-        if !self.pending_keys.is_empty() {
+        if !self.input_buffer.is_empty() {
             reply.flags = libc_missing::_NOTIFY_COND_INPUT
         } else if arm {
             self.notify = Some(NotifyClient { rcvid: trans.get_rcvid(), event: msg.event });
