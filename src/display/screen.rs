@@ -105,6 +105,7 @@ impl Screen {
     }
 
     pub fn insert_at_cursor(&mut self, chrs: &str) {
+        println!("{:?}", chrs.as_bytes());
         // Mark starting position.
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
         let mut iter = chrs.chars();
@@ -122,6 +123,7 @@ impl Screen {
                 0x07 => self.bell(),
                 0x08 => self.backspace(&mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
+                b'\r' => {}, // FIXME: anything to do here?
                 _ => self.insert_char(chr, &mut insert)
             }
         }
