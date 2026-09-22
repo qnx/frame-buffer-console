@@ -55,7 +55,7 @@ const HID_MOD_LALT: u8 = 0x04;
 const HID_MOD_RALT: u8 = 0x40;
 const HID_MOD_ALT: u8 = HID_MOD_LALT | HID_MOD_RALT;
 
-const KEY_USAGE_TABLE: [(u8, u8, u8); 82] = [
+const KEY_USAGE_TABLE: [(u8, u8, u8); 83] = [
     (0, 0, 0),
     (0, 0, 0),
     (0, 0, 0),
@@ -134,6 +134,7 @@ const KEY_USAGE_TABLE: [(u8, u8, u8); 82] = [
     (0, 0, 0),
     (0, 0, 0),
     (0, 0, 0),
+    (0, 0, 0),
     (KEY_RIGHT_ARROW, 0, MOD_SPECIAL),
     (KEY_LEFT_ARROW, 0, MOD_SPECIAL),
     (KEY_DOWN_ARROW, 0, MOD_SPECIAL),
@@ -174,6 +175,5 @@ fn translate_key(data: &[u8]) -> Option<Key> {
 
     // Add the special modifier, if needed.
     modifier |= KEY_USAGE_TABLE[code].2;
-
     Some (Key { chr, modifier })
 }
