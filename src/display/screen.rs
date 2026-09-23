@@ -43,7 +43,7 @@ impl Screen {
             columns,
             rows,
             dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
-            cursor: Cursor { col: 0, row: 0, top: 6, bottom: 6 },
+            cursor: Cursor { col: 0, row: 0, top: 7, bottom: 7 },
             default_attr: 0x07,
             attr: 0x07,
             esc: Escape::new()
