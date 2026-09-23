@@ -140,18 +140,27 @@ impl SerialServer {
 
     /// Handle a key combination that includes control.
     fn handle_ctrl(&mut self, key: Key) {
-        if key.chr == b'c' {
-            // Ctrl-C, send SIGINT to the foreground group.
-            self.signal_group(libc::SIGINT);
-        } else if key.chr == b'd' {
-            // End of transimission.
-            if let Some(trans) = &mut self.read {
-                trans.reply(0);
-                self.read = None;
+        match key.chr {
+            b'a' => {
+                // Ctrl-A, send Start Of Heading (1).
+                let chrs: [u8; 1] = [1];
+                self.data_available(&chrs);
             }
+            b'c' => {
+                // Ctrl-C, send SIGINT to the foreground group.
+                self.signal_group(libc::SIGINT);
+            }
+            b'd' => {
+                // Ctrl-D, end of transimission.
+                if let Some(trans) = &mut self.read {
+                    trans.reply(0);
+                    self.read = None;
+                }
 
-            // FIXME:
-            // What if there isn't a waiting client?
+                // FIXME:
+                // What if there isn't a waiting client?
+            }
+            _ => { println!("Unhandled control {}", key.chr); }
         }
     }
 
