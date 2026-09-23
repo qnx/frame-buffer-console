@@ -160,6 +160,11 @@ impl SerialServer {
                 // FIXME:
                 // What if there isn't a waiting client?
             }
+            b'e' => {
+                // Ctrl-E, send Enquiry (5).
+                let chrs: [u8; 1] = [5];
+                self.data_available(&chrs);
+            }
             _ => { println!("Unhandled control {}", key.chr); }
         }
     }
