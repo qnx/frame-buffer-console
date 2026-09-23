@@ -196,6 +196,7 @@ impl Screen {
             EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
             EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
+            EscapeResult::EL(_) => self.delete(1, insert), // FIXME: exact semantics?
             _ => {}
         }
 

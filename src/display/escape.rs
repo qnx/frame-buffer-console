@@ -11,6 +11,7 @@ pub struct Escape {
     pub result: EscapeResult
 }
 
+#[derive(Debug)]
 pub enum EscapeResult {
     /// Parsing failed.
     None,
@@ -25,7 +26,9 @@ pub enum EscapeResult {
     /// Cursor up.
     CUU(u32),
     /// Delete character.
-    DCH(u32)
+    DCH(u32),
+    /// Erase in line.
+    EL(u32)
 }
 
 #[derive(Debug, PartialEq)]
@@ -131,6 +134,7 @@ impl Escape {
                     b'C' => EscapeResult::CUF(self.param(1)),
                     b'D' => EscapeResult::CUB(self.param(1)),
                     b'P' => EscapeResult::DCH(self.param(1)),
+                    b'K' => EscapeResult::EL(self.param(1)),
                     _ => EscapeResult::None
                 };
 
