@@ -63,8 +63,14 @@ impl Display {
         // Map the frame buffer.
         let framebuffer = FrameBuffer::new()?;
 
+        // Choose a font based on the frame buffer's geometry.
+        let font = if (framebuffer.height * 2) < framebuffer.width {
+            &font::FONT_9X8
+        } else {
+            &font::FONT_9X16
+        };
+
         // Construct the screen object.
-        let font = &font::FONT_8X8;
         let screen = Screen::new(framebuffer.width, framebuffer.height, font)?;
         let screen = Mutex::<Screen>::new(screen);
 
