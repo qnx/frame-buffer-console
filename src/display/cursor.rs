@@ -13,12 +13,10 @@ pub struct Cursor {
 
 #[derive(Clone, Copy, Debug)]
 pub enum CursorDir {
-    Left,
-    Right,
-    Up,
-    Down,
     /// Right with wrap to the next line.
     Forward,
     /// Left with wrap to the previous line.
-    Back
+    Back,
+    /// Beginning of line.
+    BOL
 }

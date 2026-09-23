@@ -123,7 +123,7 @@ impl Screen {
                 0x07 => self.bell(),
                 0x08 => self.move_to(CursorDir::Back, 1, &mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
-                b'\r' => {}, // FIXME: anything to do here?
+                b'\r' => self.move_to(CursorDir::BOL, 1, &mut insert),
                 _ => self.insert_char(chr, &mut insert)
             }
         }
@@ -193,8 +193,8 @@ impl Screen {
                     self.attr = attr;
                 }
             }
-            EscapeResult::CUB(n) => self.move_to(CursorDir::Left, n, insert),
-            EscapeResult::CUF(n) => self.move_to(CursorDir::Right, n, insert),
+            EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
+            EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
             _ => {}
         }
@@ -235,7 +235,10 @@ impl Screen {
                     idx -= 1;
                 }
             }
-            _ => {} // FIXME: handle more directions.
+            CursorDir::BOL => {
+                idx -= col as usize;
+                col = 0;
+            }
         };
 
         insert.col = col;
