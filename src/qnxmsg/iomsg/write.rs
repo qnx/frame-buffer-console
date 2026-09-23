@@ -20,12 +20,7 @@ where ServerT: IoMsgImpl
         Err(err) => { trans.error(err); return; }
     };
 
-    let str = match std::str::from_utf8(payload) {
-        Ok(str) => str,
-        Err(_) => { trans.error(libc::EINVAL); return; }
-    };
-
-    if let Err(err) = server.write(write_msg, &str, trans) {
+    if let Err(err) = server.write(write_msg, payload, trans) {
         trans.error(err);
     }
 }

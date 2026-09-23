@@ -105,10 +105,10 @@ impl Screen {
         is_dirty
     }
 
-    pub fn insert_at_cursor(&mut self, chrs: &str) {
+    pub fn insert_at_cursor(&mut self, chrs: &[u8]) {
         // Mark starting position.
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
-        let mut iter = chrs.chars();
+        let mut iter = chrs.iter();
 
         // Resume parsing an escape sequence from a previous call.
         if self.esc.is_active() {
@@ -117,7 +117,7 @@ impl Screen {
 
         // Insert characters.
         while let Some(chr) = iter.next() {
-            let chr = chr as u8;
+            let chr = *chr;
             match chr {
                 b'\n' => self.insert_newline(&mut insert),
                 0x07 => self.bell(),
@@ -180,7 +180,7 @@ impl Screen {
 
     /// Handle a potential escape sequence.
     /// The function is called when the ESC character is encouneted in a stream.
-    fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::str::Chars<'_>) {
+    fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::slice::Iter<'_, u8>) {
         // Parse the escape sequence.
         self.esc.parse(iter.clone());
 

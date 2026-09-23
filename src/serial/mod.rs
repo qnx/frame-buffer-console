@@ -130,10 +130,8 @@ impl SerialServer {
 
         // Print the character in ECHO mode.
         if self.attr.echo_on() {
-            let str = [chr];
-            if let Ok(str) = std::str::from_utf8(&str) {
-                self.display.insert_at_cursor(&str);
-            }
+            let chrs = [chr];
+            self.display.insert_at_cursor(&chrs);
         }
 
         let chrs: [u8; 1] = [chr];

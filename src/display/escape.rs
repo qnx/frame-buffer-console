@@ -1,7 +1,5 @@
 /// Escape sequence parser.
 
-use std::str::Chars;
-
 pub struct Escape {
     /// Parser state.
     state: State,
@@ -56,14 +54,14 @@ impl Escape {
         self.state != State::Init
     }
 
-    pub fn parse(&mut self, mut iter: Chars<'_>) {
+    pub fn parse(&mut self, mut iter: std::slice::Iter<'_, u8>) {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
         let mut final_char: u8 = 0;
         loop {
             // Get the next character, aborting if reached the end before the Done state.
             let chr = match iter.next() {
-                Some(chr) => chr as u8,
+                Some(chr) => *chr,
                 None => { break; }
             };
 

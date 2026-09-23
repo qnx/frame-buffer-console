@@ -216,7 +216,7 @@ pub trait IoMsgImpl {
         Err(libc::ENOSYS)
     }
 
-    fn write(&mut self, _msg: &WriteMsg, _str: &str, _trans: &mut Transaction)
+    fn write(&mut self, _msg: &WriteMsg, _data: &[u8], _trans: &mut Transaction)
             -> Result<(), i32> {
         Err(libc::ENOSYS)
     }

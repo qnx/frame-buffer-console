@@ -31,7 +31,7 @@ impl IoMsgImpl for SerialServer {
 
     /// Handle an _IO_WRITE message.
     /// Bytes are parsed and written to the screen.
-    fn write(&mut self, _msg: &WriteMsg, data: &str, trans: &mut Transaction)
+    fn write(&mut self, _msg: &WriteMsg, data: &[u8], trans: &mut Transaction)
              -> Result<(), i32> {
         let connection = match self.connection_table.get(trans.connection_id()) {
             None => { return Err(libc::EBADF); },

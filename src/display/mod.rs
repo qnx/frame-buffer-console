@@ -87,7 +87,7 @@ impl Display {
         Display { obj: self.obj.clone() }
     }
 
-    pub fn insert_at_cursor(&mut self, chrs: &str) {
+    pub fn insert_at_cursor(&mut self, chrs: &[u8]) {
         let mut screen = self.obj.screen.lock().unwrap();
         screen.insert_at_cursor(chrs);
         self.obj.cond.notify_one();

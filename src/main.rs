@@ -13,7 +13,7 @@ fn main() {
     let mut server = SerialServer::new(&display);
     let _hid = Hid::new(&server).unwrap();
 
-    let msg = "Welcome to UEFI console!\n";
+    let msg = b"Welcome to UEFI console!\n";
     display.insert_at_cursor(msg);
 
     server.message_loop();
