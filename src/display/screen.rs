@@ -197,6 +197,7 @@ impl Screen {
             EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
             EscapeResult::EL(_) => self.delete(1, insert), // FIXME: exact semantics?
+            EscapeResult::ICH(n) => self.shift(n, insert),
             _ => {}
         }
 
@@ -258,6 +259,28 @@ impl Screen {
 
             self.buffer[insert.bufidx + i] = BLANK_CHAR;
         }
+    }
+
+    /// Shift characters in a line to the right when inserting a character.
+    fn shift(&mut self, num: u32, insert: &mut Insert) {
+        let (col, row) = (insert.col, insert.row);
+        let num = if num > self.columns - col {
+            self.columns - col
+        } else {
+            num
+        } as usize;
+
+        // Move characters in the line.
+        let eolidx = ((row + 1) * self.columns) as usize - num;
+        for idx in (insert.bufidx..eolidx).rev() {
+            self.buffer[idx + num] = self.buffer[idx];
+        }
+        for idx in 0..num {
+            self.buffer[insert.bufidx + idx] = BLANK_CHAR;
+        }
+
+        // Mark the line as dirty.
+        insert.update_rect(self.columns - 1, row);
     }
 
     fn check_scroll(&mut self, insert: &mut Insert) {

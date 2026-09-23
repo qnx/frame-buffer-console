@@ -25,7 +25,7 @@ struct DisplayObj {
 /// A character on the screen.
 /// Every position on the screen is represented by two bytes, the character and attributes (colour,
 /// background, etc.).
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ScreenChar {
     pub chr: u8,
     pub attr: u8

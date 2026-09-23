@@ -28,7 +28,9 @@ pub enum EscapeResult {
     /// Delete character.
     DCH(u32),
     /// Erase in line.
-    EL(u32)
+    EL(u32),
+    /// Insert character.
+    ICH(u32)
 }
 
 #[derive(Debug, PartialEq)]
@@ -134,8 +136,9 @@ impl Escape {
                     b'C' => EscapeResult::CUF(self.param(1)),
                     b'D' => EscapeResult::CUB(self.param(1)),
                     b'P' => EscapeResult::DCH(self.param(1)),
-                    b'K' => EscapeResult::EL(self.param(1)),
-                    _ => EscapeResult::None
+                    b'K' => EscapeResult::EL(self.param(0)),
+                    b'@' => EscapeResult::ICH(self.param(1)),
+                    _ => { println!("Unhandled escape sequence {final_char}"); EscapeResult::None }
                 };
 
                 return;
