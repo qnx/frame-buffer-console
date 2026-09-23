@@ -209,6 +209,8 @@ impl Screen {
 
     /// Update the insertion position based on the given direction.
     fn move_to(&self, dir: CursorDir, _num: u32, insert: &mut Insert) {
+        // FIXME:
+        // Handle the num argument.
         let (mut col, mut row, mut idx) = (insert.col, insert.row, insert.bufidx);
         match dir {
             CursorDir::Forward => {
