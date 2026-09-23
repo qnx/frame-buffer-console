@@ -148,16 +148,16 @@ impl Escape {
                 attr = 0;
             } else if param >= 30 && param <= 37 {
                 // Dark foreground colour.
-                attr = (attr & 0xf0) | (param as u8 - 30)
+                attr = (attr & 0xf0) | (param as u8 - 30);
             } else if param >= 40 && param <= 47 {
                 // Dark background colour.
-                attr = (attr & 0x0f) | ((param as u8 - 40) << 4)
+                attr = (attr & 0x0f) | ((param as u8 - 40) << 4);
             } else if param >= 90 && param <= 97 {
                 // Light foreground colour.
-                attr = (attr & 0xf0) | (param as u8 - 30)
+                attr = (attr & 0xf0) | (param as u8 - 82);
             } else if param >= 100 && param <= 107 {
                 // Light background colour.
-                attr = (attr & 0x0f) | ((param as u8 - 100) << 4)
+                attr = (attr & 0x0f) | ((param as u8 - 92) << 4);
             }
         }
 
