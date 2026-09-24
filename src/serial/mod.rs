@@ -135,7 +135,7 @@ impl SerialServer {
         }
 
         let chrs: [u8; 1] = [chr];
-        self.data_available(&chrs);
+        self.data_available(&chrs, chr == b'\n');
     }
 
     /// Handle a key combination that includes control.
@@ -144,7 +144,7 @@ impl SerialServer {
             b'a' => {
                 // Ctrl-A, send Start Of Heading (1).
                 let chrs: [u8; 1] = [1];
-                self.data_available(&chrs);
+                self.data_available(&chrs, false);
             }
             b'c' => {
                 // Ctrl-C, send SIGINT to the foreground group.
@@ -163,7 +163,7 @@ impl SerialServer {
             b'e' => {
                 // Ctrl-E, send Enquiry (5).
                 let chrs: [u8; 1] = [5];
-                self.data_available(&chrs);
+                self.data_available(&chrs, false);
             }
             _ => { println!("Unhandled control {}", key.chr); }
         }
@@ -171,10 +171,10 @@ impl SerialServer {
 
     fn handle_special(&mut self, key: Key) {
         match key.chr {
-            KEY_LEFT_ARROW => self.data_available(&[0x1b, b'[', b'D']),
-            KEY_RIGHT_ARROW => self.data_available(&[0x1b, b'[', b'C']),
-            KEY_UP_ARROW => self.data_available(&[0x1b, b'[', b'A']),
-            KEY_DOWN_ARROW => self.data_available(&[0x1b, b'[', b'B']),
+            KEY_LEFT_ARROW => self.data_available(&[0x1b, b'[', b'D'], false),
+            KEY_RIGHT_ARROW => self.data_available(&[0x1b, b'[', b'C'], false),
+            KEY_UP_ARROW => self.data_available(&[0x1b, b'[', b'A'], false),
+            KEY_DOWN_ARROW => self.data_available(&[0x1b, b'[', b'B'], false),
             _ => {}
         }
     }
@@ -182,27 +182,46 @@ impl SerialServer {
     /// Called when new data is ready to be read from the device.
     /// If there is a pending read transaction, the transaction is replied to. Any remaining data
     /// is stored in the input buffer for future reads.
-    fn data_available(&mut self, chrs: &[u8]) {
-        // Check for a waiting read().
-        let mut len = chrs.len();
-        let mut pos = 0;
-        if let Some(trans) = &mut self.read {
-            // Reply to the client with as many bytes as it requested.
-            assert!(self.input_buffer.is_empty());
-            let reply_len = std::cmp::min(len, trans.get_reply_size());
-            trans.reply_with_payload_and_size(reply_len as i64, chrs, reply_len);
-            self.read = None;
-
-            len -= reply_len;
-            if len == 0 {
+    fn data_available(&mut self, chrs: &[u8], eol: bool) {
+        if self.attr.is_canonical() {
+            // Canonical mode always buffers the data first.
+            self.input_buffer.push(chrs);
+            if !eol {
                 return;
             }
 
-            pos += reply_len;
-        }
+            // End of line.
+            // If there is a waiting reader, reply with the contents of the buffer.
+            if let Some(trans) = &mut self.read {
+                let (data, len) = self.input_buffer.get_data(trans.get_reply_size());
+                trans.reply_with_payload_and_size(len as i64, data, len);
+                self.input_buffer.pop(len);
+                self.read = None;
+                return;
+            }
+        } else {
+            // Raw mode.
+            // Check for a waiting read().
+            let mut len = chrs.len();
+            let mut pos = 0;
+            if let Some(trans) = &mut self.read {
+                // Reply to the client with as many bytes as it requested.
+                assert!(self.input_buffer.is_empty());
+                let reply_len = std::cmp::min(len, trans.get_reply_size());
+                trans.reply_with_payload_and_size(reply_len as i64, chrs, reply_len);
+                self.read = None;
 
-        // Queue the remaining data.
-        self.input_buffer.push(&chrs[pos..]);
+                len -= reply_len;
+                if len == 0 {
+                    return;
+                }
+
+                pos += reply_len;
+            }
+
+            // Queue the remaining data.
+            self.input_buffer.push(&chrs[pos..]);
+        }
 
         // Notify a client that has registered for input events.
         if let Some(notify) = &mut self.notify {

@@ -1,4 +1,6 @@
-const CHAR_BUF_SIZE: usize = 64;
+/// The size of the buffer.
+/// In canonical mode, this is the maximum length of a line.
+const CHAR_BUF_SIZE: usize = 1024;
 
 /// Circular buffer of pending char events.
 pub struct CharBuf {

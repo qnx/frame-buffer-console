@@ -36,4 +36,8 @@ impl TerminalAttributes {
     pub fn echo_on(&self) -> bool {
         (self.local & libc::ECHO) != 0
     }
+
+    pub fn is_canonical(&self) -> bool {
+        (self.local & libc::ICANON) != 0
+    }
 }
