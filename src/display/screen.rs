@@ -152,6 +152,7 @@ impl Screen {
         // Move the position one to the right, wrapping as necessary.
         insert.col += 1;
         if insert.col == self.columns {
+            insert.col = 0;
             insert.row += 1;
         }
     }
