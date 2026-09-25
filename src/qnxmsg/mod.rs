@@ -30,8 +30,8 @@ pub const S_INMQ: u32 = 0x3;
 pub struct MsgInfo {
     nd: u32,
     srcnd: u32,
-    pid: i32,
-    tid: i32,
+    pub pid: i32,
+    pub tid: i32,
     chid: i32,
     scoid: i32,
     coid: i32,

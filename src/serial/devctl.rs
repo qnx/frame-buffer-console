@@ -153,16 +153,19 @@ impl SerialServer {
         };
 
         // Make sure the caller is in the session associated with this device.
-        let sid = trans.get_client_info()?.sid;
-        if !self.sid_match(sid) {
+        let info = trans.get_client_info()?;
+        if !self.sid_match(info.sid) {
             return Err(libc::ENOTTY);
         }
 
-        // FIXME:
-        // Send SIGTTOU signal?
+        // Send SIGTTOU signal if client is in a background process group.
+        if (info.flags & libc::_NTO_CI_BKGND_PGRP) != 0 {
+            let (pid, tid) = (trans.info.pid, trans.info.tid);
+            self.signal_background_group(pid, tid, libc::SIGTTOU)?;
+        }
 
         // Let the process manager know about the new foreground group.
-        procmgr_session_ext(sid, 0, pgid, libc_missing::PROCMGR_SESSION_SETPGRP)?;
+        procmgr_session_ext(info.sid, 0, pgid, libc_missing::PROCMGR_SESSION_SETPGRP)?;
 
         self.job.as_mut().unwrap().fpgid = pgid;
         trans.reply(0);

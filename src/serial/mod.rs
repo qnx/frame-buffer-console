@@ -148,7 +148,7 @@ impl SerialServer {
             }
             b'c' => {
                 // Ctrl-C, send SIGINT to the foreground group.
-                self.signal_group(libc::SIGINT);
+                self.signal_foreground_group(libc::SIGINT);
             }
             b'd' => {
                 // Ctrl-D, end of transimission.
@@ -230,13 +230,38 @@ impl SerialServer {
     }
 
     /// Send a signal to the foreground group, if any.
-    fn signal_group(&self, signo: i32) {
+    fn signal_foreground_group(&self, signo: i32) {
         if let Some(job) = &self.job {
             // Note that PROCMGR_SESSION_SIGNAL_PGRP expects the session ID as the first argument,
             // not the ID of the foreground group. Procnto is supposed to know which group is the
             // foreground group, and deliver the signal to it.
             procmgr_session_ext(job.sid, 0, signo,
                                 libc_missing::PROCMGR_SESSION_SIGNAL_PGRP).unwrap();
+        }
+    }
+
+    /// Send a signal to the background group.
+    /// The function returns an error if and only if the signal was not blocked by the receiver.
+    /// This is used for handling POSIX semantics for SIGTTOU/SIGTTIN, in which a process that
+    /// blocks the signal is allowed to perform the requested operation.
+    fn signal_background_group(&self, pid: i32, tid: i32, signo: i32) ->
+        Result<(), i32> {
+        // Note that despite its name, PROCMGR_SESSION_SIGNAL_PID will signal the process
+        // group, as required.
+        match procmgr_session_ext(pid, tid, signo,
+                                  libc_missing::PROCMGR_SESSION_SIGNAL_PID) {
+            Ok(()) => {
+                // Signal was sent, do not perform the requested operation.
+                Err(libc::EINTR)
+            }
+            Err(libc::EIO) => {
+                // Signal was blocked, proceed to change group.
+                Ok(())
+            }
+            Err(err) => {
+                // Some other error.
+                Err(err)
+            }
         }
     }
 }
