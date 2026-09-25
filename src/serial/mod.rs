@@ -152,13 +152,8 @@ impl SerialServer {
             }
             b'd' => {
                 // Ctrl-D, end of transimission.
-                if let Some(trans) = &mut self.read {
-                    trans.reply(0);
-                    self.read = None;
-                }
-
-                // FIXME:
-                // What if there isn't a waiting client?
+                let chrs: [u8; 0] = [];
+                self.data_available(&chrs, true);
             }
             b'e' => {
                 // Ctrl-E, send Enquiry (5).
