@@ -25,6 +25,8 @@ pub enum EscapeResult {
     CUF(u32),
     /// Cursor up.
     CUU(u32),
+    /// Cursor position.
+    CUP(u32, u32),
     /// Delete character.
     DCH(u32),
     /// Erase in line.
@@ -138,12 +140,13 @@ impl Escape {
                 // Process sequence based on the final character.
                 self.result = match final_char {
                     b'm' => self.sgr_to_attr(),
-                    b'C' => EscapeResult::CUF(self.param(1)),
-                    b'D' => EscapeResult::CUB(self.param(1)),
-                    b'P' => EscapeResult::DCH(self.param(1)),
-                    b'K' => EscapeResult::EL(self.param(0)),
-                    b'J' => EscapeResult::ED(self.param(0)),
-                    b'@' => EscapeResult::ICH(self.param(1)),
+                    b'C' => EscapeResult::CUF(self.param(0, 1)),
+                    b'D' => EscapeResult::CUB(self.param(0, 1)),
+                    b'P' => EscapeResult::DCH(self.param(0, 1)),
+                    b'K' => EscapeResult::EL(self.param(0, 0)),
+                    b'J' => EscapeResult::ED(self.param(0, 0)),
+                    b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
+                    b'@' => EscapeResult::ICH(self.param(0, 1)),
                     _ => { println!("Unhandled escape sequence {}", final_char as char); EscapeResult::None }
                 };
 
@@ -177,9 +180,9 @@ impl Escape {
         EscapeResult::SGR(attr)
     }
 
-    fn param(&mut self, default: u32) -> u32 {
-        if self.params.len() > 0 {
-            self.params[0]
+    fn param(&mut self, which: usize, default: u32) -> u32 {
+        if self.params.len() > which {
+            self.params[which]
         } else {
             default
         }

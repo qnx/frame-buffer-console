@@ -196,6 +196,7 @@ impl Screen {
             }
             EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
             EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
+            EscapeResult::CUP(r, c) => self.set_cursor_pos(c, r, insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
@@ -250,6 +251,32 @@ impl Screen {
         insert.col = col;
         insert.row = row;
         insert.bufidx = idx;
+    }
+
+    /// Set the cursor position according to the semantics of the CUP control sequence.
+    /// The values are 1-based.
+    fn set_cursor_pos(&self, col: u32, row: u32, insert: &mut Insert) {
+        insert.col = {
+            if col >= self.columns {
+                self.columns - 1
+            } else if col > 0 {
+                col - 1
+            } else {
+                0
+            }
+        };
+
+        insert.row = {
+            if row >= self.rows {
+                self.rows - 1
+            } else if row > 0 {
+                row - 1
+            } else {
+                0
+            }
+        };
+
+        insert.bufidx = (insert.row * self.columns + insert.col) as usize;
     }
 
     /// Delete num characters from the current position.
