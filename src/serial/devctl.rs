@@ -6,6 +6,7 @@ use crate::libc_missing;
 
 const DCMD_ALL_GETFLAGS: u32 = 0x40040101;
 const DCMD_CHR_TCSETSID: u32 = 0x80040308;
+const DCMD_CHR_TTYINFO: u32 = 0x4024030a;
 const DCMD_CHR_ISATTY: u32 = 0x318;
 const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
 const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
@@ -36,6 +37,14 @@ struct TcgetattrReply {
 struct TcgetsizeReply {
     hdr: DevctlReply,
     size: libc::winsize
+}
+
+#[repr(C, packed)]
+struct TtyinfoReply {
+    opencount: u32,
+    pad1: u32,
+    ttyname: [char; 9],
+    pad2: [u8; 23]
 }
 
 impl DevctlReply {
@@ -80,6 +89,7 @@ impl SerialServer {
             DCMD_CHR_TCSETATTRD => ACCESS_WRITE,
             DCMD_CHR_TCGETSIZE => ACCESS_READ,
             DCMD_CHR_TCSETSIZE => ACCESS_WRITE,
+            DCMD_CHR_TTYINFO => ACCESS_READ,
             _ => ACCESS_WRITE
         };
 
@@ -97,6 +107,7 @@ impl SerialServer {
             DCMD_CHR_TCSETATTRD => self.tcsetattr(payload, trans),
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             DCMD_CHR_TCSETSIZE => self.tcsetsize(payload, trans),
+            DCMD_CHR_TTYINFO => self.ttyinfo(trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
         }
     }
@@ -201,7 +212,8 @@ impl SerialServer {
             hdr: DevctlReply::new::<libc::termios>(0),
             attr
         };
-        trans.reply_with_payload(0, &reply); Ok(())
+        trans.reply_with_payload(0, &reply);
+        Ok(())
     }
 
     /// Set treminal attributes.
@@ -260,6 +272,19 @@ impl SerialServer {
         }
 
         trans.reply(0);
+        Ok(())
+    }
+
+    /// Reply to the ttyinfo request.
+    fn ttyinfo(&self, trans: &mut Transaction) -> Result<(), i32> {
+        let reply = TtyinfoReply {
+            opencount: self.connection_table.count(),
+            pad1: 0,
+            ttyname: [ '/', 'd', 'e', 'v', '/', 'u', 'e', 'f', 'i' ],
+            pad2: [0; 23]
+        };
+
+        trans.reply_with_payload(0, &reply);
         Ok(())
     }
 }

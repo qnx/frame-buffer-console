@@ -4,13 +4,17 @@ use std::collections::HashMap;
 
 /// Hash table for storing connection objects.
 pub struct ConnectionTable<ConnectionT> {
-    table: HashMap<(i64, i32), Rc<RefCell<ConnectionT>>>
+    table: HashMap<(i64, i32), Rc<RefCell<ConnectionT>>>,
+    count: u32
 }
 
 impl<ConnectionT> ConnectionTable<ConnectionT> {
     /// Create an empty connection table.
     pub fn new() -> Self {
-        ConnectionTable { table: HashMap::<(i64, i32), Rc<RefCell<ConnectionT>>>::new() }
+        ConnectionTable {
+            table: HashMap::<(i64, i32), Rc<RefCell<ConnectionT>>>::new(),
+            count: 0
+        }
     }
 
     /// Find a connection object given a process ID and a client connection ID.
@@ -26,9 +30,16 @@ impl<ConnectionT> ConnectionTable<ConnectionT> {
         let connection = Rc::clone(connection);
         let result = self.table.insert(pid_coid, connection);
         assert!(result.is_none());
+        self.count += 1;
     }
 
     pub fn remove(&mut self, pid_coid: (i64, i32)) -> Option<Rc<RefCell<ConnectionT>>> {
+        self.count -= 1;
         self.table.remove(&pid_coid)
+    }
+
+    /// Return the number of open connections.
+    pub fn count(&self) -> u32 {
+        self.count
     }
 }
