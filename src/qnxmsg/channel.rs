@@ -10,6 +10,8 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// Create a new channel.
+    /// See the QNX documentation for ChannelCreate() for details.
     pub fn new(flags: u32) -> Result<Self, i32> {
         let chid =
             unsafe {
@@ -27,6 +29,11 @@ impl Channel {
         Ok(channel)
     }
 
+    /// Receive a message or a pulse on the channel.
+    /// Data is copied into the given message buffer, which can then be interpreted according to
+    /// the type of message/pulse.
+    /// A successful result holds the receive ID that can be used in other calls, such as
+    /// MsgRead(), MsgReply(), etc.
     pub fn receive(&self, buf: &mut MsgBuf, info: &mut MsgInfo) -> Result<i64, i32> {
         let rcvid = unsafe {
             let buf_ptr = buf.as_void_ptr();
@@ -34,7 +41,7 @@ impl Channel {
                 as *mut libc::_msg_info64;
 
             libc_missing::MsgReceive_r(self.chid, buf_ptr,
-                                       std::mem::size_of::<MsgBuf>(),
+                                       buf.get_size(),
                                        info_ptr)
         };
 

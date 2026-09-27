@@ -1,18 +1,24 @@
+const MSG_BUF_SIZE: usize = 2048;
+
 /// Message buffer.
 /// Used as a buffer when receiving a message. Should be decoded and transmuted
 /// into a concrete message type.
 #[derive(Debug)]
 pub struct MsgBuf {
-    data: [u8; 2048],
+    data: [u8; MSG_BUF_SIZE],
     len: usize
 }
 
 impl MsgBuf {
     pub fn new() -> Self {
         MsgBuf {
-            data: [ 0u8; 2048 ],
+            data: [0u8; MSG_BUF_SIZE],
             len: 0
         }
+    }
+
+    pub fn get_size(&self) -> usize {
+        MSG_BUF_SIZE
     }
 
     /// Get the first 16 bytes of the message, which represent its type.
@@ -27,6 +33,7 @@ impl MsgBuf {
     }
 
     pub fn set_length(&mut self, len: usize) {
+        assert!(len <= MSG_BUF_SIZE);
         self.len = len;
     }
 
