@@ -330,7 +330,7 @@ impl Screen {
         }
 
         // Assume the entire screen needs to be updated.
-        insert.rect = Rect { left: 0, right: self.columns - 1, top: 0, bottom: self.rows - 1 };
+        insert.rect = self.full_rect();
     }
 
     /// Shift characters in a line to the right when inserting a character.
@@ -375,8 +375,12 @@ impl Screen {
         self.buffer_top_row = (self.buffer_top_row + 1) % self.rows;
 
         // The entire screen needs to be updated.
-        self.dirty =
-            Some(Rect { left: 0, top: 0, right: self.columns - 1, bottom: self.rows - 1});
+        self.dirty = Some(self.full_rect());
+    }
+
+    /// Return a rectangle encompassing the entire screen
+    fn full_rect(&self) -> Rect {
+        Rect { left: 0, top: 0, right: self.columns - 1, bottom: self.rows - 1 }
     }
 }
 
