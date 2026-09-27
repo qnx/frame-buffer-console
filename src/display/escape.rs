@@ -29,6 +29,8 @@ pub enum EscapeResult {
     DCH(u32),
     /// Erase in line.
     EL(u32),
+    /// Erase in page.
+    ED(u32),
     /// Insert character.
     ICH(u32)
 }
@@ -88,6 +90,9 @@ impl Escape {
                     } else if chr == b'?' {
                         // Private sequence?
                         State::CsiParameter
+                    } else if chr == b'>' {
+                        // Private sequence?
+                        State::CsiParameter
                     } else if chr >= 0x20 && chr < 0x2f {
                         param_done = true;
                         State::CsiIntermediate
@@ -137,8 +142,9 @@ impl Escape {
                     b'D' => EscapeResult::CUB(self.param(1)),
                     b'P' => EscapeResult::DCH(self.param(1)),
                     b'K' => EscapeResult::EL(self.param(0)),
+                    b'J' => EscapeResult::ED(self.param(0)),
                     b'@' => EscapeResult::ICH(self.param(1)),
-                    _ => { println!("Unhandled escape sequence {final_char}"); EscapeResult::None }
+                    _ => { println!("Unhandled escape sequence {}", final_char as char); EscapeResult::None }
                 };
 
                 return;

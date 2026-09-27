@@ -197,7 +197,8 @@ impl Screen {
             EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
             EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
-            EscapeResult::EL(_) => self.delete(1, insert), // FIXME: exact semantics?
+            EscapeResult::EL(n) => self.erase_line(n, insert),
+            EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
             _ => {}
         }
@@ -260,6 +261,49 @@ impl Screen {
 
             self.buffer[insert.bufidx + i] = BLANK_CHAR;
         }
+    }
+
+    /// Delete characters in the display, according to the semantics of the Erase Line (EL) control
+    /// sequence:
+    /// 0 - from cursor position to end of line
+    /// 1 - from beginning of line to cursor position (inclusive)
+    /// 2 - all
+    fn erase_line(&mut self, how: u32, insert: &mut Insert) {
+        let (first_idx, count) = match how {
+            0 => (insert.bufidx, self.columns - insert.col),
+            1 => (insert.bufidx - insert.col as usize, insert.col + 1),
+            2 => (insert.bufidx - insert.col as usize, self.columns),
+            _ => { return; }
+        };
+
+        for idx in first_idx..(first_idx + count as usize) {
+            self.buffer[idx] = BLANK_CHAR;
+        }
+
+        // Assume the entire line needs to be updated.
+        insert.update_rect(0, insert.row);
+        insert.update_rect(self.columns - 1, insert.row);
+    }
+
+    /// Delete characters in the display, according to the semantics of the Erase Page (ED) control
+    /// sequence:
+    /// 0 - from cursor position to end of display
+    /// 1 - from beginning of display to cursor position (inclusive)
+    /// 2 - all
+    fn erase_page(&mut self, how: u32, insert: &mut Insert) {
+        let (first_idx, last_idx) = match how {
+            0 => (insert.bufidx, self.buffer.len() - 1),
+            1 => (0, insert.bufidx),
+            2 => (0, self.buffer.len() - 1),
+            _ => { return; }
+        };
+
+        for idx in first_idx..=last_idx {
+            self.buffer[idx] = BLANK_CHAR;
+        }
+
+        // Assume the entire screen needs to be updated.
+        insert.rect = Rect { left: 0, right: self.columns - 1, top: 0, bottom: self.rows - 1 };
     }
 
     /// Shift characters in a line to the right when inserting a character.
