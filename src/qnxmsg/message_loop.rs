@@ -11,6 +11,7 @@ use crate::qnxmsg::iomsg::notify::*;
 use crate::qnxmsg::iomsg::openfd::*;
 use crate::qnxmsg::iomsg::read::*;
 use crate::qnxmsg::iomsg::stat::*;
+use crate::qnxmsg::iomsg::sync::*;
 use crate::qnxmsg::iomsg::write::*;
 use crate::qnxmsg::iomsg::pulse::*;
 
@@ -62,6 +63,7 @@ where ServerT: IoMsgImpl
             _IO_OPENFD => openfd(server, buf, &mut trans),
             _IO_MSG => msg(server, buf, &mut trans),
             _IO_DUP => dup(server, buf, &mut trans),
+            _IO_SYNC => sync(server, buf, &mut trans),
             _IO_CLOSE => close(server, &mut trans),
             _ => {
                 println!("Unhandled message {msg_type}");

@@ -11,6 +11,7 @@ pub mod openfd;
 pub mod notify;
 pub mod read;
 pub mod stat;
+pub mod sync;
 pub mod write;
 pub mod pulse;
 
@@ -49,6 +50,7 @@ pub const _IO_OPENFD: u16 = 0x10d;
 pub const _IO_MSG: u16 = 0x113;
 pub const _IO_DUP: u16 = 0x115;
 pub const _IO_CLOSE: u16 = 0x116;
+pub const _IO_SYNC: u16 = 0x119;
 
 #[repr(C, packed)]
 #[derive(Debug)]
@@ -193,6 +195,14 @@ pub struct NotifyReply {
     pub flags: u32
 }
 
+#[repr(C, packed)]
+#[derive(Debug)]
+pub struct SyncMsg {
+    msg_type: u16,
+    combine_len: u16,
+    pub flag: u32
+}
+
 /// Trait for I/O messages delivered to the server.
 pub trait IoMsgImpl {
     fn connect(&mut self, _msg: &ConnectMsg, _path: &str,
@@ -242,6 +252,11 @@ pub trait IoMsgImpl {
     }
 
     fn notify(&mut self, _msg: &NotifyMsg, _fds: &[libc::pollfd], _trans: &mut Transaction)
+           -> Result<(), i32> {
+        Err(libc::ENOSYS)
+    }
+
+    fn sync(&mut self, _msg: &SyncMsg, _trans: &mut Transaction)
            -> Result<(), i32> {
         Err(libc::ENOSYS)
     }
