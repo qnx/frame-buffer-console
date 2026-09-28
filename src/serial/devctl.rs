@@ -234,6 +234,10 @@ impl SerialServer {
         self.attr.output = attr.c_oflag;
         self.attr.control = attr.c_cflag;
         self.attr.local = attr.c_lflag;
+
+        // Apply changes to the display.
+        self.display.set_cr_to_nl((attr.c_iflag & libc::ICRNL) != 0);
+
         trans.reply(0);
         Ok(())
     }

@@ -17,6 +17,8 @@ pub struct Screen {
     pub rows: u32,
     /// Cursor position and shape.
     pub cursor: Cursor,
+    /// Translate carriage return to newline.
+    pub cr_to_nl: bool,
     /// Region of updated contents.
     dirty: Option<Rect>,
     /// Default character attributes.
@@ -24,7 +26,7 @@ pub struct Screen {
     /// Current attributes.
     attr: u8,
     /// Escape sequence parser.
-    esc: Escape
+    esc: Escape,
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
@@ -46,7 +48,8 @@ impl Screen {
             cursor: Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 },
             default_attr: 0x07,
             attr: 0x07,
-            esc: Escape::new()
+            esc: Escape::new(),
+            cr_to_nl: false
         };
 
         // Start with a clear screen.
@@ -123,7 +126,13 @@ impl Screen {
                 0x07 => self.bell(),
                 0x08 => self.move_to(CursorDir::Back, 1, &mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
-                b'\r' => self.move_to(CursorDir::BOL, 1, &mut insert),
+                b'\r' => {
+                    if self.cr_to_nl {
+                        self.insert_newline(&mut insert)
+                    } else {
+                        self.move_to(CursorDir::BOL, 1, &mut insert)
+                    }
+                }
                 _ => self.insert_char(chr, &mut insert)
             }
         }
