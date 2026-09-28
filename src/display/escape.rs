@@ -63,7 +63,7 @@ impl Escape {
         self.state != State::Init
     }
 
-    pub fn parse(&mut self, mut iter: std::slice::Iter<'_, u8>) {
+    pub fn parse(&mut self, mut iter: std::slice::Iter<'_, u8>, attr: u8) {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
         let mut final_char: u8 = 0;
@@ -139,7 +139,7 @@ impl Escape {
             if self.state == State::Done {
                 // Process sequence based on the final character.
                 self.result = match final_char {
-                    b'm' => self.sgr_to_attr(),
+                    b'm' => self.sgr_to_attr(attr),
                     b'C' => EscapeResult::CUF(self.param(0, 1)),
                     b'D' => EscapeResult::CUB(self.param(0, 1)),
                     b'P' => EscapeResult::DCH(self.param(0, 1)),
@@ -147,7 +147,8 @@ impl Escape {
                     b'J' => EscapeResult::ED(self.param(0, 0)),
                     b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
                     b'@' => EscapeResult::ICH(self.param(0, 1)),
-                    _ => { println!("Unhandled escape sequence {}", final_char as char); EscapeResult::None }
+                    _ => { println!("Unhandled escape sequence {}", final_char as char);
+                           EscapeResult::None }
                 };
 
                 return;
@@ -155,13 +156,16 @@ impl Escape {
         }
     }
 
-    fn sgr_to_attr(&self) -> EscapeResult {
-        let mut attr: u8 = 0;
+    fn sgr_to_attr(&self, default_attr: u8) -> EscapeResult {
+        let mut attr: u8 = default_attr;
         for i in 0..self.params.len() {
             let param = self.params[i];
             if param == 0 {
                 // Reset.
-                attr = 0;
+                attr = default_attr;
+            } else if param == 7 || param == 27 {
+                // Reverse video.
+                attr = (attr >> 4) | (attr & 0xf) << 4;
             } else if param >= 30 && param <= 37 {
                 // Dark foreground colour.
                 attr = (attr & 0xf0) | (param as u8 - 30);

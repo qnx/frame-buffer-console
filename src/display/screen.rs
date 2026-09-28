@@ -183,17 +183,11 @@ impl Screen {
     /// The function is called when the ESC character is encouneted in a stream.
     fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::slice::Iter<'_, u8>) {
         // Parse the escape sequence.
-        self.esc.parse(iter.clone());
+        self.esc.parse(iter.clone(), self.default_attr);
 
         // Act on the result.
         match self.esc.result {
-            EscapeResult::SGR(attr) => {
-                if attr == 0 {
-                    self.attr = self.default_attr;
-                } else {
-                    self.attr = attr;
-                }
-            }
+            EscapeResult::SGR(attr) => self.attr = attr,
             EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
             EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
             EscapeResult::CUP(r, c) => self.set_cursor_pos(c, r, insert),

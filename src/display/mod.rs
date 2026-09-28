@@ -159,7 +159,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
 
     // Determine foreground and background colours.
     let mut fg = PALETTE[(chr.attr & 0xf) as usize];
-    let mut bg = PALETTE[((chr.attr >> 4) & 0x7) as usize];
+    let mut bg = PALETTE[((chr.attr >> 4) & 0xf) as usize];
 
     // Find the starting pixel of the glyph in the frame buffer.
     let stride = framebuffer.stride as u64;
@@ -175,11 +175,11 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
             if (i >= screen.cursor.top) && (i <= screen.cursor.bottom) {
                 // Inside block, use inverted colours.
                 fg = PALETTE[((chr.attr >> 4) & 0xf) as usize];
-                bg = PALETTE[(chr.attr & 0x7) as usize];
+                bg = PALETTE[(chr.attr & 0xf) as usize];
             } else {
                 // Outside block, use normal colours.
                 fg = PALETTE[(chr.attr & 0xf) as usize];
-                bg = PALETTE[((chr.attr >> 4) & 0x7) as usize];
+                bg = PALETTE[((chr.attr >> 4) & 0xf) as usize];
             }
         }
 
