@@ -417,6 +417,10 @@ impl Insert {
             self.rect.right = col;
         }
 
+        if row < self.rect.top {
+            self.rect.top = row;
+        }
+
         if row > self.rect.bottom {
             self.rect.bottom = row;
         }
