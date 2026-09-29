@@ -5,6 +5,7 @@ use crate::qnxmsg::iomsg::DevctlReply;
 use crate::libc_missing;
 
 const DCMD_ALL_GETFLAGS: u32 = 0x40040101;
+const DCMD_ALL_SETFLAGS: u32 = 0x80040102;
 const DCMD_CHR_TCSETSID: u32 = 0x80040308;
 const DCMD_CHR_TTYINFO: u32 = 0x4024030a;
 const DCMD_CHR_ISATTY: u32 = 0x318;
@@ -90,15 +91,19 @@ impl SerialServer {
             DCMD_CHR_TCGETSIZE => ACCESS_READ,
             DCMD_CHR_TCSETSIZE => ACCESS_WRITE,
             DCMD_CHR_TTYINFO => ACCESS_READ,
+            DCMD_ALL_SETFLAGS => ACCESS_NONE,
             _ => ACCESS_WRITE
         };
 
-        if (req_access & access) == 0 {
+        if (req_access & access) != req_access {
+            let pid = trans.info.pid;
+            println!("devctl {:x} from {}: no permissions", dcmd, pid);
             return Err(libc::EPERM);
         }
 
         match dcmd {
             DCMD_ALL_GETFLAGS => self.getflags(access, trans),
+            DCMD_ALL_SETFLAGS => self.setflags(payload, trans),
             DCMD_CHR_ISATTY => { trans.reply(0); Ok(()) },
             DCMD_CHR_TCSETSID => self.tcsetsid(payload, trans),
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
@@ -131,6 +136,18 @@ impl SerialServer {
             oflag
         };
         trans.reply_with_payload(0, &reply); Ok(())
+    }
+
+    /// Set file descripor I/O flags.
+    fn setflags(&mut self, payload: &[u8], trans: &mut Transaction) -> Result<(), i32> {
+        let flags = match transmute_payload::<u32>(payload) {
+            Ok(flags) => flags,
+            Err(_) => { return Err(libc::EBADMSG); }
+        };
+
+        println!("setflags {:o}", flags);
+        trans.reply(0);
+        Ok(())
     }
 
     /// Set the session ID for the controlling terminal.

@@ -16,6 +16,7 @@ mod msgbuf;
 pub const RESMGR_FLAG_DIR: u32 = 0x100;
 pub const RESMGR_FLAG_FTYPE_ONLY: u32 = 0x8;
 
+pub const ACCESS_NONE: u8 = 0x00;
 pub const ACCESS_READ: u8 = 0x01;
 pub const ACCESS_WRITE: u8 = 0x02;
 pub const ACCESS_EXEC: u8 = 0x04;
