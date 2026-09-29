@@ -83,7 +83,7 @@ impl Screen {
             }
 
             if rect.right > dirty.right {
-                dirty.right = rect.right;
+                dirty.right = std::cmp::min(rect.right, self.columns - 1);
                 is_dirty = true;
             }
 
@@ -93,7 +93,7 @@ impl Screen {
             }
 
             if rect.bottom > dirty.bottom {
-                dirty.bottom = rect.bottom;
+                dirty.bottom = std::cmp::min(rect.right, self.rows - 1);
                 is_dirty = true;
             }
 
@@ -299,6 +299,8 @@ impl Screen {
     /// 1 - from beginning of line to cursor position (inclusive)
     /// 2 - all
     fn erase_line(&mut self, how: u32, insert: &mut Insert) {
+        self.check_scroll(insert);
+
         let (first_idx, count) = match how {
             0 => (insert.bufidx, self.columns - insert.col),
             1 => (insert.bufidx - insert.col as usize, insert.col + 1),
@@ -321,6 +323,8 @@ impl Screen {
     /// 1 - from beginning of display to cursor position (inclusive)
     /// 2 - all
     fn erase_page(&mut self, how: u32, insert: &mut Insert) {
+        self.check_scroll(insert);
+
         let (first_idx, last_idx) = match how {
             0 => (insert.bufidx, self.buffer.len() - 1),
             1 => (0, insert.bufidx),
