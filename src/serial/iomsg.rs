@@ -33,20 +33,35 @@ impl IoMsgImpl for SerialServer {
 
     /// Handle an _IO_WRITE message.
     /// Bytes are parsed and written to the screen.
-    fn write(&mut self, _msg: &WriteMsg, data: &[u8], trans: &mut Transaction)
+    fn write(&mut self, msg: &WriteMsg, data: &[u8], trans: &mut Transaction)
              -> Result<(), i32> {
         let connection = match self.connection_table.get(trans.connection_id()) {
             None => { return Err(libc::EBADF); },
             Some(s) => s
         };
 
+        // Verify write access.
         let connection = connection.borrow();
         if (connection.access & qnxmsg::ACCESS_WRITE) == 0 {
             return Err(libc::EACCES);
         }
 
+        // Handle the bytes available in the internal buffer.
+        let mut write_len = 0;
         self.display.insert_at_cursor(data);
-        trans.reply(data.len() as i64);
+        write_len += data.len();
+
+        // Handle additional bytes in the message.
+        let mut offset = size_of::<WriteMsg>() + data.len();
+        while write_len < msg.nbytes as usize {
+            let mut data: [u8; 1024] = [0; 1024];
+            let nbytes = trans.read(&mut data, offset)?;
+            self.display.insert_at_cursor(&data[0..nbytes]);
+            write_len += nbytes;
+            offset += nbytes;
+        }
+
+        trans.reply(write_len as i64);
         Ok(())
     }
 
