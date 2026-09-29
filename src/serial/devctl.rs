@@ -12,6 +12,7 @@ const DCMD_CHR_ISATTY: u32 = 0x318;
 const DCMD_CHR_TCSETPGRP: u32 = 0x80047476;
 const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
 const DCMD_CHR_TCGETATTR : u32 = 0x404c7413;
+const DCMD_CHR_TCSETATTR : u32 = 0x804c7414;
 const DCMD_CHR_TCSETATTRD : u32 = 0x804c7415;
 const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
 const DCMD_CHR_TCSETSIZE : u32 = 0x80087467;
@@ -80,24 +81,11 @@ impl SerialServer {
     /// Top-level devctl dispatcher.
     pub fn devctl(&mut self, dcmd: u32, payload: &[u8], access: u8,
                   trans: &mut Transaction) -> Result<(), i32> {
-        let req_access = match dcmd {
-            DCMD_ALL_GETFLAGS => ACCESS_READ,
-            DCMD_CHR_ISATTY => ACCESS_READ,
-            DCMD_CHR_TCSETSID => ACCESS_WRITE,
-            DCMD_CHR_TCSETPGRP => ACCESS_WRITE,
-            DCMD_CHR_TCGETPGRP => ACCESS_READ,
-            DCMD_CHR_TCGETATTR => ACCESS_READ,
-            DCMD_CHR_TCSETATTRD => ACCESS_WRITE,
-            DCMD_CHR_TCGETSIZE => ACCESS_READ,
-            DCMD_CHR_TCSETSIZE => ACCESS_WRITE,
-            DCMD_CHR_TTYINFO => ACCESS_READ,
-            DCMD_ALL_SETFLAGS => ACCESS_NONE,
-            _ => ACCESS_WRITE
-        };
-
-        if (req_access & access) != req_access {
+        // For historical reasons, all character device devctl()s can be performed on read-only
+        // file descriptors.
+        if (access & ACCESS_READ) == 0 {
             let pid = trans.info.pid;
-            println!("devctl {:x} from {}: no permissions", dcmd, pid);
+            println!("devctl {:x} from {}: no permissions {:o}", dcmd, pid, access);
             return Err(libc::EPERM);
         }
 
@@ -109,6 +97,7 @@ impl SerialServer {
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
             DCMD_CHR_TCGETPGRP => self.tcgetpgrp(trans),
             DCMD_CHR_TCGETATTR => self.tcgetattr(trans),
+            DCMD_CHR_TCSETATTR => self.tcsetattr(payload, trans),
             DCMD_CHR_TCSETATTRD => self.tcsetattr(payload, trans),
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             DCMD_CHR_TCSETSIZE => self.tcsetsize(payload, trans),
