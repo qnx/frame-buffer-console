@@ -22,29 +22,27 @@ where ServerT: IoMsgImpl
     // Revisit how buf and info are allocated.
     let mut buf = MsgBuf::new();
     loop {
-        let err = receive(server, channel, &mut buf);
-        if err != 0 {
-            panic!("Recive failed: {err}")
+        match receive(server, channel, &mut buf) {
+            Ok(()) => {},
+            Err(libc::EINTR) => {},
+            Err(err) => panic!("Recive failed: {err}")
         };
     }
 }
 
 /// Receive a message or a pulse on the channel.
 fn receive<ServerT>(server: &mut ServerT, channel: Channel, buf: &mut MsgBuf)
-                    -> i32
+                    -> Result<(), i32>
 where ServerT: IoMsgImpl
 {
     // Receive a single message/pulse.
     let mut trans = Transaction::new();
-    let rcvid = match channel.receive(buf, &mut trans.info) {
-        Ok(rcvid) => rcvid,
-        Err(err) => { return -err; }
-    };
+    let rcvid = channel.receive(buf, &mut trans.info)?;
 
     if rcvid == 0 {
         // Received a pulse.
         pulse(server, buf);
-        return 0;
+        return Ok(());
     }
 
     trans.set_rcvid(rcvid);
@@ -82,5 +80,5 @@ where ServerT: IoMsgImpl
         };
     };
 
-    0
+    Ok(())
 }
