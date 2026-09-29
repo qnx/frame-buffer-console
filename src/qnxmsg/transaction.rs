@@ -206,4 +206,20 @@ impl Transaction {
             info: self.info
         }
     }
+
+    /// Read message contents at the given offset.
+    /// The function is typically used when a message is larger than the buffer supplied to
+    /// Channel::receive() to access the remaining bytes.
+    pub fn read(&self, data: &mut [u8], offset: usize) -> Result<usize, i32> {
+        let rc = unsafe {
+            libc_missing::MsgRead_r(self.rcvid, data as *mut [u8] as *mut libc::c_void,
+                                    data.len(), offset)
+        };
+
+        if rc < 0 {
+            return Err(-rc as i32);
+        }
+
+        Ok(rc as usize)
+    }
 }
