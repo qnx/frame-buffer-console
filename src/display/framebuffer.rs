@@ -5,6 +5,7 @@ use crate::libc_missing;
 #[derive(Debug)]
 pub struct FrameBuffer {
     pub addr: u64,
+    pub size: u32,
     pub width: u32,
     pub height: u32,
     pub stride: u32
@@ -64,6 +65,13 @@ impl FrameBuffer {
     pub fn new() -> Result<FrameBuffer, ()> {
         let hfb = hwi_framebuffer()?;
         let addr = map_framebuffer(hfb.buffer, hfb.bufsize as usize)?;
-        Ok(FrameBuffer { addr, width: hfb.hres, height: hfb.vres, stride: hfb.stride })
+        Ok(FrameBuffer { addr, size: hfb.bufsize, width: hfb.hres, height: hfb.vres,
+                         stride: hfb.stride })
+    }
+
+    /// Write a value into the frame buffer.
+    pub fn set_pixel(&self, pixel: u64, value: u32) {
+        assert!(pixel < self.size as u64);
+        unsafe { *((self.addr + pixel) as *mut u32) = value };
     }
 }

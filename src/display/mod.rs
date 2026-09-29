@@ -168,7 +168,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
 
     // Find the starting pixel of the glyph in the frame buffer.
     let stride = framebuffer.stride as u64;
-    let mut pixel = framebuffer.addr + (start_y * stride);
+    let mut pixel = start_y * stride;
 
     // Draw the glyph itself.
     let mut bitidx = chr.chr as u32 * font.wbits as u32 * font.hbits as u32;
@@ -195,8 +195,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
                 false => bg
             };
 
-            unsafe { *((pixel + xoff) as *mut u32) = pixel_colour };
-
+            framebuffer.set_pixel(pixel + xoff, pixel_colour);
             xoff += BYTES_PER_PIXEL;
             bitidx += 1;
         }
@@ -214,7 +213,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
                 bg
             };
 
-            unsafe { *((pixel + xoff) as *mut u32) = pixel_colour };
+            framebuffer.set_pixel(pixel + xoff, pixel_colour);
             xoff += BYTES_PER_PIXEL;
         }
 
