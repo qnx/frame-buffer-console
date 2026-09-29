@@ -1,3 +1,5 @@
+use std::rc::Rc;
+use std::cell::RefCell;
 use crate::serial::*;
 use crate::qnxmsg::*;
 use crate::qnxmsg::transaction::Transaction;
@@ -79,19 +81,18 @@ fn transmute_payload<T>(payload: &[u8]) -> Result<&T, ()> {
 
 impl SerialServer {
     /// Top-level devctl dispatcher.
-    pub fn devctl(&mut self, dcmd: u32, payload: &[u8], access: u8,
-                  trans: &mut Transaction) -> Result<(), i32> {
+    pub fn devctl(&mut self, dcmd: u32, payload: &[u8], trans: &mut Transaction,
+                  connection: &Rc<RefCell<SerialConnection>>) -> Result<(), i32> {
         // For historical reasons, all character device devctl()s can be performed on read-only
         // file descriptors.
+        let access = connection.borrow().access;
         if (access & ACCESS_READ) == 0 {
-            let pid = trans.info.pid;
-            println!("devctl {:x} from {}: no permissions {:o}", dcmd, pid, access);
             return Err(libc::EPERM);
         }
 
         match dcmd {
             DCMD_ALL_GETFLAGS => self.getflags(access, trans),
-            DCMD_ALL_SETFLAGS => self.setflags(payload, trans),
+            DCMD_ALL_SETFLAGS => self.setflags(payload, trans, connection),
             DCMD_CHR_ISATTY => { trans.reply(0); Ok(()) },
             DCMD_CHR_TCSETSID => self.tcsetsid(payload, trans),
             DCMD_CHR_TCSETPGRP => self.tcsetpgrp(payload, trans),
@@ -128,13 +129,19 @@ impl SerialServer {
     }
 
     /// Set file descripor I/O flags.
-    fn setflags(&mut self, payload: &[u8], trans: &mut Transaction) -> Result<(), i32> {
+    fn setflags(&mut self, payload: &[u8], trans: &mut Transaction,
+                connection: &Rc<RefCell<SerialConnection>>) -> Result<(), i32> {
         let flags = match transmute_payload::<u32>(payload) {
             Ok(flags) => flags,
             Err(_) => { return Err(libc::EBADMSG); }
         };
 
-        println!("setflags {:o}", flags);
+        // Can only change O_NONBLOCK.
+        if (flags & !libc::O_NONBLOCK as u32) != 0 {
+            return Err(libc::EINVAL);
+        }
+
+        connection.borrow_mut().block_io = (flags & libc::O_NONBLOCK as u32) == 0;
         trans.reply(0);
         Ok(())
     }

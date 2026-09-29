@@ -22,8 +22,10 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EPERM);
         }
 
+        let block_io = (msg.ioflag & (libc::O_NONBLOCK as u32)) == 0;
+
         // Add a new connection to the table.
-        let connection = SerialConnection { access };
+        let connection = SerialConnection { access, block_io };
         let connection = Rc::new(RefCell::new(connection));
         self.connection_table.add(trans.connection_id(), &connection);
         Ok(())
@@ -83,6 +85,10 @@ impl IoMsgImpl for SerialServer {
         // If there are no pending keys, then remember the transaction so that it can be replied to
         // once a key event occurs.
         if self.input_buffer.is_empty() {
+            if !connection.block_io {
+                return Err(libc::EAGAIN);
+            }
+
             self.read = Some(trans.reply_later());
             return Ok(());
         }
@@ -149,13 +155,13 @@ impl IoMsgImpl for SerialServer {
     /// Handle an _IO_DEVCTL message.
     fn devctl(&mut self, msg: &DevctlMsg, payload: &[u8], trans: &mut Transaction)
             -> Result<(), i32> {
-        let connection = match self.connection_table.get(trans.connection_id()) {
+        let connection_ref = match self.connection_table.get(trans.connection_id()) {
             None => { return Err(libc::EBADF); },
             Some(s) => s
         };
 
-        let access = connection.borrow().access;
-        self.devctl(msg.dcmd, payload, access, trans)
+        let connection_ref = connection_ref.clone();
+        self.devctl(msg.dcmd, payload, trans, &connection_ref)
     }
 
     /// Handle an _IO_OPENFD message.
@@ -200,8 +206,10 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EPERM);
         }
 
+        let block_io = (msg.ioflag & (libc::O_NONBLOCK as u32)) == 0;
+
         // Add a new connection to the table.
-        let connection = SerialConnection { access };
+        let connection = SerialConnection { access, block_io };
         let connection = Rc::new(RefCell::new(connection));
         self.connection_table.add(trans.connection_id(), &connection);
         trans.reply(0);

@@ -39,7 +39,8 @@ pub struct SerialServer {
 
 /// Information for an open connection.
 pub struct SerialConnection {
-    access: u8
+    access: u8,
+    block_io: bool
 }
 
 /// Job control data.
