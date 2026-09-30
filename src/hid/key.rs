@@ -8,6 +8,8 @@ pub const KEY_LEFT_ARROW: u8 = 1;
 pub const KEY_RIGHT_ARROW: u8 = 2;
 pub const KEY_UP_ARROW: u8 = 3;
 pub const KEY_DOWN_ARROW: u8 = 4;
+pub const KEY_CANON_EOL: u8 = 5;
+pub const KEY_CANON_EOT: u8 = 6;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Key {

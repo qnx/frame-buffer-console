@@ -108,6 +108,8 @@ impl Screen {
         is_dirty
     }
 
+    /// Insert multiple characters at the cursor's position.
+    /// The cursor is updated to one past the last inserted character's position.
     pub fn insert_at_cursor(&mut self, chrs: &[u8]) {
         // Mark starting position.
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
@@ -140,6 +142,44 @@ impl Screen {
         // Set new cursor position.
         self.check_scroll(&mut insert);
         self.cursor.col = insert.col;
+        self.cursor.row = insert.row;
+        insert.update_rect(insert.col, insert.row);
+
+        // Update the dirty rectangle.
+        self.set_dirty(&insert.rect);
+    }
+
+    /// Insert characters at the given row and column.
+    /// This is used to implement canonical mode line editing, and therefore should only affect the
+    /// given row.
+    /// Note that it is assumed all characters are displayable (should be taken care of by the line
+    /// editor).
+    pub fn insert_line(&mut self, chrs: &[u8], row: u32, col: u32, cursor_col: u32) {
+        // Add characters.
+        let mut insert = Insert::new(self, col, row);
+        let mut iter = chrs.iter();
+
+        // Insert characters.
+        while let Some(chr) = iter.next() {
+            let chr = *chr;
+
+            // Stop at a newline.
+            if chr == b'\n' {
+                self.insert_newline(&mut insert);
+                break;
+            }
+
+            // The line may exceed the width of the screen. Drop extra characters, but keep
+            // processing to detect a newline.
+            if insert.col < self.columns {
+                self.buffer[insert.bufidx] = ScreenChar { chr, attr: self.attr };
+                insert.bufidx += 1;
+                insert.col += 1;
+            }
+        }
+
+        // Set new cursor position.
+        self.cursor.col = cursor_col;
         self.cursor.row = insert.row;
         insert.update_rect(insert.col, insert.row);
 

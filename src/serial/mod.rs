@@ -2,6 +2,7 @@ mod iomsg;
 mod devctl;
 mod charbuf;
 mod termios;
+mod lineeditor;
 
 use crate::libc_missing;
 use crate::qnxmsg::*;
@@ -12,6 +13,7 @@ use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
 use crate::serial::charbuf::CharBuf;
+use crate::serial::lineeditor::LineEditor;
 use crate::serial::termios::*;
 use crate::hid::key::*;
 
@@ -29,6 +31,8 @@ pub struct SerialServer {
     job: Option<JobControl>,
     /// Characters that have not been read.
     input_buffer: CharBuf,
+    /// LineEditor line editor.
+    lineedit: LineEditor,
     /// Read transaction waiting for a reply.
     read: Option<Transaction>,
     /// A client event to emit when input is available.
@@ -71,6 +75,7 @@ impl SerialServer {
             perms: FilePerms::new(0, 0, 0o666),
             job: None,
             input_buffer: CharBuf::new(),
+            lineedit: LineEditor::new(),
             read: None,
             notify: None,
             attr: TerminalAttributes::new()
@@ -117,7 +122,16 @@ impl SerialServer {
     /// Handle a key event from the HID polling thread.
     /// If a client is waiting on a read request, the key is used in a reply to the client.
     /// Otherwise, the key is queued for a future read().
-    fn key_event(&mut self, key: Key) {
+    fn key_event(&mut self, mut key: Key) {
+        if self.attr.is_canonical() {
+            // Canonical mode.
+            // Let the line editor handle the key first.
+            key = match self.lineedit.key_event(key, &mut self.display) {
+                Some(key) => key,
+                None => { return; }
+            };
+        }
+
         let chr = key.chr;
         if key.is_ctrl() {
             self.handle_ctrl(key);
@@ -136,7 +150,7 @@ impl SerialServer {
         }
 
         let chrs: [u8; 1] = [chr];
-        self.data_available(&chrs, chr == b'\n');
+        self.data_available(Some(&chrs));
     }
 
     /// Handle a key combination that includes control.
@@ -145,7 +159,7 @@ impl SerialServer {
             b'a' => {
                 // Ctrl-A, send Start Of Heading (1).
                 let chrs: [u8; 1] = [1];
-                self.data_available(&chrs, false);
+                self.data_available(Some(&chrs));
             }
             b'c' => {
                 // Ctrl-C, send SIGINT to the foreground group.
@@ -154,70 +168,83 @@ impl SerialServer {
             b'd' => {
                 // Ctrl-D, end of transimission.
                 let chrs: [u8; 0] = [];
-                self.data_available(&chrs, true);
+                self.data_available(Some(&chrs));
             }
             b'e' => {
                 // Ctrl-E, send Enquiry (5).
                 let chrs: [u8; 1] = [5];
-                self.data_available(&chrs, false);
+                self.data_available(Some(&chrs));
             }
             _ => { println!("Unhandled control {}", key.chr); }
         }
     }
 
+    /// Handle a key marked with the special modifier.
     fn handle_special(&mut self, key: Key) {
         match key.chr {
-            KEY_LEFT_ARROW => self.data_available(&[0x1b, b'[', b'D'], false),
-            KEY_RIGHT_ARROW => self.data_available(&[0x1b, b'[', b'C'], false),
-            KEY_UP_ARROW => self.data_available(&[0x1b, b'[', b'A'], false),
-            KEY_DOWN_ARROW => self.data_available(&[0x1b, b'[', b'B'], false),
+            KEY_LEFT_ARROW => self.data_available(Some(&[0x1b, b'[', b'D'])),
+            KEY_RIGHT_ARROW => self.data_available(Some(&[0x1b, b'[', b'C'])),
+            KEY_UP_ARROW => self.data_available(Some(&[0x1b, b'[', b'A'])),
+            KEY_DOWN_ARROW => self.data_available(Some(&[0x1b, b'[', b'B'])),
+            KEY_CANON_EOL => self.canon_eol(),
+            KEY_CANON_EOT => self.canon_eot(),
             _ => {}
         }
+    }
+
+    /// Handle end-of-line (typically ENTER) in canonical mode.
+    /// EOL makes the current line buffer available as input and moves the editor to the next line.
+    fn canon_eol(&mut self) {
+        // Make the line buffer available to readers.
+        assert!(self.attr.is_canonical());
+        self.data_available(None);
+
+        // Start editing the next line.
+        // Note that scrolling can affect the resulting line number.
+        self.lineedit.set_line(self.display.get_cursor_pos().1);
+    }
+
+    /// Handle end-of-transmission (typically Ctrl-D) in canonical mode.
+    /// Makes the contents of the line editor's buffer available to readers.
+    fn canon_eot(&mut self) {
+        // Make the line buffer available to readers.
+        assert!(self.attr.is_canonical());
+        self.data_available(None);
     }
 
     /// Called when new data is ready to be read from the device.
     /// If there is a pending read transaction, the transaction is replied to. Any remaining data
     /// is stored in the input buffer for future reads.
-    fn data_available(&mut self, chrs: &[u8], eol: bool) {
-        if self.attr.is_canonical() {
-            // Canonical mode always buffers the data first.
-            self.input_buffer.push(chrs);
-            if !eol {
+    /// If chrs is None then use the line editor's buffer as the source of data.
+    fn data_available(&mut self, chrs: Option<&[u8]>) {
+        // The use of Option<&[u8]> avoids the restriction of the borrow checkers, which prevents
+        // a mutable reference to self and a non-mutable reference to the line editor's buffer from
+        // being passed to this function.
+        let chrs = match chrs {
+            Some(chrs) => chrs,
+            None => self.lineedit.get_line()
+        };
+
+        // Check for a waiting read().
+        let mut len = chrs.len();
+        let mut pos = 0;
+        if let Some(trans) = &mut self.read {
+            // Reply to the client with as many bytes as it requested.
+            assert!(self.input_buffer.is_empty());
+            let reply_len = std::cmp::min(len, trans.get_reply_size());
+            trans.reply_with_payload_and_size(reply_len as i64, chrs, reply_len);
+            self.read = None;
+
+            len -= reply_len;
+            if len == 0 {
                 return;
             }
 
-            // End of line.
-            // If there is a waiting reader, reply with the contents of the buffer.
-            if let Some(trans) = &mut self.read {
-                let (data, len) = self.input_buffer.get_data(trans.get_reply_size());
-                trans.reply_with_payload_and_size(len as i64, data, len);
-                self.input_buffer.pop(len);
-                self.read = None;
-                return;
-            }
-        } else {
-            // Raw mode.
-            // Check for a waiting read().
-            let mut len = chrs.len();
-            let mut pos = 0;
-            if let Some(trans) = &mut self.read {
-                // Reply to the client with as many bytes as it requested.
-                assert!(self.input_buffer.is_empty());
-                let reply_len = std::cmp::min(len, trans.get_reply_size());
-                trans.reply_with_payload_and_size(reply_len as i64, chrs, reply_len);
-                self.read = None;
-
-                len -= reply_len;
-                if len == 0 {
-                    return;
-                }
-
-                pos += reply_len;
-            }
-
-            // Queue the remaining data.
-            self.input_buffer.push(&chrs[pos..]);
+            pos += reply_len;
         }
+
+        // Queue the remaining data.
+        self.input_buffer.push(&chrs[pos..]);
 
         // Notify a client that has registered for input events.
         if let Some(notify) = &mut self.notify {

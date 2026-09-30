@@ -243,6 +243,7 @@ impl SerialServer {
         };
 
         // Apply new attributes.
+        let was_canonical = self.attr.is_canonical();
         self.attr.input = attr.c_iflag;
         self.attr.output = attr.c_oflag;
         self.attr.control = attr.c_cflag;
@@ -250,6 +251,11 @@ impl SerialServer {
 
         // Apply changes to the display.
         self.display.set_cr_to_nl((attr.c_iflag & libc::ICRNL) != 0);
+
+        // Check if entering canonical mode.
+        if !was_canonical && self.attr.is_canonical() {
+            self.lineedit.set_line(self.display.get_cursor_pos().1);
+        }
 
         trans.reply(0);
         Ok(())
