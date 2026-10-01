@@ -124,13 +124,13 @@ impl Screen {
         while let Some(chr) = iter.next() {
             let chr = *chr;
             match chr {
-                b'\n' => self.insert_newline(&mut insert),
+                b'\n' => self.newline(&mut insert),
                 0x07 => self.bell(),
                 0x08 => self.move_to(CursorDir::Back, 1, &mut insert),
                 0x1b => self.maybe_escape(&mut insert, &mut iter),
                 b'\r' => {
                     if self.cr_to_nl {
-                        self.insert_newline(&mut insert)
+                        self.newline(&mut insert)
                     } else {
                         self.move_to(CursorDir::BOL, 1, &mut insert)
                     }
@@ -165,7 +165,7 @@ impl Screen {
 
             // Stop at a newline.
             if chr == b'\n' {
-                self.insert_newline(&mut insert);
+                self.newline(&mut insert);
                 break;
             }
 
@@ -206,22 +206,15 @@ impl Screen {
         }
     }
 
-    fn insert_newline(&mut self, insert: &mut Insert) {
+    /// Move the cursor to the beginning of the next line.
+    fn newline(&mut self, insert: &mut Insert) {
         // Check for scrolling if inserting into an overflow row.
         self.check_scroll(insert);
-
-        // Fill the buffer with empty characters from the given position to the end of the row.
-        for _ in insert.col..self.columns {
-            self.buffer[insert.bufidx] = BLANK_CHAR;
-            insert.bufidx += 1;
-        }
-
-        // Update bounding rectangle.
-        insert.update_rect(self.columns - 1, insert.row);
 
         // Move to the next line.
         insert.col = 0;
         insert.row += 1;
+        insert.bufidx = (insert.row * self.columns) as usize;
     }
 
     fn bell(&mut self) {
