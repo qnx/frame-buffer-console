@@ -33,20 +33,20 @@ pub struct ScreenChar {
 
 const PALETTE: [u32; 16] = [
     0xFF000000, // 0 - black
-    0xFF0000AA, // 1 - blue
+    0xFFAA0000, // 1 - red
     0xFF00AA00, // 2 - green
-    0xFF00AAAA, // 3 - cyan
-    0xFFAA0000, // 4 - red
+    0xFFAA5500, // 3 - brown
+    0xFF0000AA, // 4 - blue
     0xFFAA00AA, // 5 - magenta
-    0xFFAA5500, // 6 - brown
+    0xFF00AAAA, // 6 - cyan
     0xFFAAAAAA, // 7 - white
     0xFF555555, // 8 - grey
-    0xFF5555FF, // 9 - light blue
+    0xFFFF5555, // 9 - light red
     0xFF55FF55, // 10 - light green
-    0xFF55FFFF, // 11 - light cyan
-    0xFFFF5555, // 12 - light red
+    0xFFFFFF55, // 11 - yellow
+    0xFF5555FF, // 12 - light blue
     0xFFFF55FF, // 13 - light magenta
-    0xFFFFFF55, // 14 - yellow
+    0xFF55FFFF, // 14 - light cyan
     0xFFFFFFFF, // 15 - bright white
 ];
 
