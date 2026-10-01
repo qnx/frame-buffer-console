@@ -93,7 +93,7 @@ impl Screen {
             }
 
             if rect.bottom > dirty.bottom {
-                dirty.bottom = std::cmp::min(rect.right, self.rows - 1);
+                dirty.bottom = std::cmp::min(rect.bottom, self.rows - 1);
                 is_dirty = true;
             }
 
