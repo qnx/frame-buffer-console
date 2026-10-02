@@ -24,7 +24,7 @@ pub struct Screen {
     /// Current attributes.
     attr: u8,
     /// Escape sequence parser.
-    esc: Escape,
+    pub escape: Escape,
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
@@ -45,7 +45,7 @@ impl Screen {
             dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
             cursor: Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 },
             attr: DEFAULT_ATTR,
-            esc: Escape::new(),
+            escape: Escape::new(),
             cr_to_nl: false
         };
 
@@ -117,7 +117,7 @@ impl Screen {
         // This doesn't really handle all cases of resuming from a previous call.
         // 1. An incomplete parameter
         // 2. A sequence that ends in a parse error doesn't remember the accumulated characters
-        if self.esc.is_active() {
+        if self.escape.is_active() {
             pos += self.maybe_escape(&mut insert, chrs);
         }
 
@@ -228,12 +228,12 @@ impl Screen {
     /// The function is called when the ESC character is encouneted in a stream.
     fn maybe_escape(&mut self, insert: &mut Insert, data: &[u8]) -> usize {
         // Parse the escape sequence.
-        if !self.esc.parse(data) {
-            return self.esc.len;
+        if !self.escape.parse(data) {
+            return self.escape.len;
         }
 
         // Act on the result.
-        match self.esc.result {
+        match self.escape.result {
             EscapeResult::SGR(attr) => self.attr = attr,
             EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
             EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
@@ -245,8 +245,8 @@ impl Screen {
             _ => {}
         }
 
-        let len = self.esc.len;
-        self.esc.reset();
+        let len = self.escape.len;
+        self.escape.reset();
         len
     }
 
