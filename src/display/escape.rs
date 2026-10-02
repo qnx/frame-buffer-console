@@ -103,6 +103,8 @@ impl Escape {
                         b']' => State::String,   // Operating System Command
                         b'^' => State::String,   // Privacy Message
                         b'_' => State::String,   // Application Program Command
+                        b'=' => State::Done,     // Application keypad
+                        b'>' => State::Done,     // Normal keypad
                         _ => State::Error
                     }
                 },
