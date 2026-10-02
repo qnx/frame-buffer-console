@@ -254,41 +254,40 @@ impl Screen {
     fn move_to(&self, dir: CursorDir, insert: &mut Insert) {
         // FIXME:
         // Handle the num argument.
-        let (mut col, mut row, mut idx) = (insert.col, insert.row, insert.bufidx);
+        let (mut col, mut row) = (insert.col, insert.row);
         match dir {
-            CursorDir::Forward(_) => {
-                if col == self.columns - 1 {
-                    if row < self.rows {
-                        col = 0;
-                        row += 1;
-                        idx += 1;
-                    }
+            CursorDir::Forward(n) => {
+                // FIXME:
+                // No support for n beyond EOL. Does it matter?
+                if col + n < self.columns {
+                    // Within the same row.
+                    col += n;
                 } else {
-                    col += 1;
-                    idx += 1;
+                    // Move to the beginning of the next row.
+                    // May require scrolling.
+                    col = 0;
+                    row += 1;
                 }
             }
-            CursorDir::Back(_) => {
-                if col == 0 {
-                    if row > 0 {
-                        col = self.columns - 1;
-                        row -= 1;
-                        idx -= 1;
-                    }
+            CursorDir::Back(n) => {
+                if col >= n {
+                    col -= n;
+                } else if row > 0 {
+                    col = self.columns - 1;
+                    row -= 1;
                 } else {
-                    col -= 1;
-                    idx -= 1;
+                    col = 0;
+                    row = 0;
                 }
             }
             CursorDir::BOL => {
-                idx -= col as usize;
                 col = 0;
             }
         };
 
         insert.col = col;
         insert.row = row;
-        insert.bufidx = idx;
+        insert.bufidx = ((row * self.columns) + col) as usize;
     }
 
     /// Set the cursor position according to the semantics of the CUP control sequence.
