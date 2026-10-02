@@ -49,6 +49,7 @@ enum State {
     CsiParam,
     CsiParamValue,
     CsiIntermediate,
+    CsiFinal,
     String,
     StringTerminator,
     Done,
@@ -81,7 +82,6 @@ impl Escape {
     pub fn parse(&mut self, data: &[u8]) -> bool {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
-        let mut final_char: u8 = 0;
         let mut data_iter = data.into_iter();
         let mut chr_opt = data_iter.next();
 
@@ -121,8 +121,8 @@ impl Escape {
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         param_done = true;
-                        final_char = chr;
-                        State::Done
+                        next = false;
+                        State::CsiFinal
                     } else {
                         State::Error
                     }
@@ -140,8 +140,8 @@ impl Escape {
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         param_done = true;
-                        final_char = chr;
-                        State::Done
+                        next = false;
+                        State::CsiFinal
                     } else {
                         State::Error
                     }
@@ -151,11 +151,15 @@ impl Escape {
                     if chr >= 0x20 && chr < 0x2f {
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
-                        final_char = chr;
-                        State::Done
+                        next = false;
+                        State::CsiFinal
                     } else {
                         State::Error
                     }
+                }
+                State::CsiFinal => {
+                    self.csi(chr);
+                    State::Done
                 }
                 State::String => {
                     if chr >= 0x20 && chr <= 0x7e {
@@ -204,26 +208,11 @@ impl Escape {
 
             // Check for end of parsing.
             if self.state == State::Done {
-                // Process sequence based on the final character.
-                self.result = match final_char {
-                    b'm' => self.sgr_to_attr(),
-                    b'C' => EscapeResult::CUF(self.param(0, 1)),
-                    b'D' => EscapeResult::CUB(self.param(0, 1)),
-                    b'P' => EscapeResult::DCH(self.param(0, 1)),
-                    b'K' => EscapeResult::EL(self.param(0, 0)),
-                    b'J' => EscapeResult::ED(self.param(0, 0)),
-                    b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
-                    b'@' => EscapeResult::ICH(self.param(0, 1)),
-                    b'c' => match self.prefix {
-                        Some(b'>') => EscapeResult::DA2,
-                        _ => EscapeResult::None
-                    }
-                    _ => EscapeResult::None
-                };
-
                 if self.result == EscapeResult::None {
                     let str = bytes_to_string(&data[0..self.len]);
                     println!("Unhandled escape sequence '{str}'");
+                } else {
+                    println!("{:?}", self.result);
                 }
 
                 return true;
@@ -233,6 +222,29 @@ impl Escape {
         false
     }
 
+    /// Terminate a command sequence introducer.
+    /// The final character determines the resulting command.
+    fn csi(&mut self, final_char: u8) {
+        // Process sequence based on the final character.
+        self.result = match final_char {
+            b'm' => self.sgr_to_attr(),
+            b'C' => EscapeResult::CUF(self.param(0, 1)),
+            b'D' => EscapeResult::CUB(self.param(0, 1)),
+            b'P' => EscapeResult::DCH(self.param(0, 1)),
+            b'K' => EscapeResult::EL(self.param(0, 0)),
+            b'J' => EscapeResult::ED(self.param(0, 0)),
+            b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
+            b'@' => EscapeResult::ICH(self.param(0, 1)),
+            b'c' => match self.prefix {
+                Some(b'>') => EscapeResult::DA2,
+                _ => EscapeResult::None
+            }
+            _ => EscapeResult::None
+        };
+    }
+
+    /// Convert a CSI graphics command to character attributes.
+    /// Currently only handles foreground and background colours.
     fn sgr_to_attr(&self) -> EscapeResult {
         let mut attr: u8 = 0;
         for i in 0..self.params.len() {
