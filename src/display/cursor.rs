@@ -18,5 +18,7 @@ pub enum CursorDir {
     /// Left with wrap to the previous line.
     Back(u32),
     /// Beginning of line.
-    BOL
+    BOL,
+    /// Specific column and row.
+    Position(u32, u32)
 }

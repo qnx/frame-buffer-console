@@ -127,13 +127,13 @@ impl Screen {
             match chr {
                 b'\n' => self.newline(&mut insert),
                 0x07 => self.bell(),
-                0x08 => self.move_to(CursorDir::Back(1), &mut insert),
+                0x08 => self.move_cursor(CursorDir::Back(1), &mut insert),
                 0x1b => pos += self.maybe_escape(&mut insert, &chrs[pos + 1..]),
                 b'\r' => {
                     if self.cr_to_nl {
                         self.newline(&mut insert)
                     } else {
-                        self.move_to(CursorDir::BOL, &mut insert)
+                        self.move_cursor(CursorDir::BOL, &mut insert)
                     }
                 }
                 _ => self.insert_char(chr, &mut insert)
@@ -235,9 +235,9 @@ impl Screen {
         // Act on the result.
         match self.escape.result {
             EscapeResult::SGR(attr) => self.attr = attr,
-            EscapeResult::CUB(n) => self.move_to(CursorDir::Back(n), insert),
-            EscapeResult::CUF(n) => self.move_to(CursorDir::Forward(n), insert),
-            EscapeResult::CUP(r, c) => self.set_cursor_pos(c, r, insert),
+            EscapeResult::CUB(n) => self.move_cursor(CursorDir::Back(n), insert),
+            EscapeResult::CUF(n) => self.move_cursor(CursorDir::Forward(n), insert),
+            EscapeResult::CUP(r, c) => self.move_cursor(CursorDir::Position(c, r), insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
@@ -251,7 +251,7 @@ impl Screen {
     }
 
     /// Update the insertion position based on the given direction.
-    fn move_to(&self, dir: CursorDir, insert: &mut Insert) {
+    fn move_cursor(&self, dir: CursorDir, insert: &mut Insert) {
         // FIXME:
         // Handle the num argument.
         let (mut col, mut row) = (insert.col, insert.row);
@@ -283,37 +283,31 @@ impl Screen {
             CursorDir::BOL => {
                 col = 0;
             }
+            CursorDir::Position(c, r) => {
+                col = {
+                    if c >= self.columns {
+                        self.columns - 1
+                    } else if c > 0 {
+                        c - 1
+                    } else {
+                        0
+                    }
+                };
+                row = {
+                    if r >= self.rows {
+                        self.rows - 1
+                    } else if r > 0 {
+                        r - 1
+                    } else {
+                        0
+                    }
+                };
+            }
         };
 
         insert.col = col;
         insert.row = row;
         insert.bufidx = ((row * self.columns) + col) as usize;
-    }
-
-    /// Set the cursor position according to the semantics of the CUP control sequence.
-    /// The values are 1-based.
-    fn set_cursor_pos(&self, col: u32, row: u32, insert: &mut Insert) {
-        insert.col = {
-            if col >= self.columns {
-                self.columns - 1
-            } else if col > 0 {
-                col - 1
-            } else {
-                0
-            }
-        };
-
-        insert.row = {
-            if row >= self.rows {
-                self.rows - 1
-            } else if row > 0 {
-                row - 1
-            } else {
-                0
-            }
-        };
-
-        insert.bufidx = (insert.row * self.columns + insert.col) as usize;
     }
 
     /// Delete num characters from the current position.
