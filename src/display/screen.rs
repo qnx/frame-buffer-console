@@ -127,13 +127,13 @@ impl Screen {
             match chr {
                 b'\n' => self.newline(&mut insert),
                 0x07 => self.bell(),
-                0x08 => self.move_to(CursorDir::Back, 1, &mut insert),
+                0x08 => self.move_to(CursorDir::Back(1), &mut insert),
                 0x1b => pos += self.maybe_escape(&mut insert, &chrs[pos + 1..]),
                 b'\r' => {
                     if self.cr_to_nl {
                         self.newline(&mut insert)
                     } else {
-                        self.move_to(CursorDir::BOL, 1, &mut insert)
+                        self.move_to(CursorDir::BOL, &mut insert)
                     }
                 }
                 _ => self.insert_char(chr, &mut insert)
@@ -235,8 +235,8 @@ impl Screen {
         // Act on the result.
         match self.escape.result {
             EscapeResult::SGR(attr) => self.attr = attr,
-            EscapeResult::CUB(n) => self.move_to(CursorDir::Back, n, insert),
-            EscapeResult::CUF(n) => self.move_to(CursorDir::Forward, n, insert),
+            EscapeResult::CUB(n) => self.move_to(CursorDir::Back(n), insert),
+            EscapeResult::CUF(n) => self.move_to(CursorDir::Forward(n), insert),
             EscapeResult::CUP(r, c) => self.set_cursor_pos(c, r, insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
             EscapeResult::EL(n) => self.erase_line(n, insert),
@@ -251,12 +251,12 @@ impl Screen {
     }
 
     /// Update the insertion position based on the given direction.
-    fn move_to(&self, dir: CursorDir, _num: u32, insert: &mut Insert) {
+    fn move_to(&self, dir: CursorDir, insert: &mut Insert) {
         // FIXME:
         // Handle the num argument.
         let (mut col, mut row, mut idx) = (insert.col, insert.row, insert.bufidx);
         match dir {
-            CursorDir::Forward => {
+            CursorDir::Forward(_) => {
                 if col == self.columns - 1 {
                     if row < self.rows {
                         col = 0;
@@ -268,7 +268,7 @@ impl Screen {
                     idx += 1;
                 }
             }
-            CursorDir::Back => {
+            CursorDir::Back(_) => {
                 if col == 0 {
                     if row > 0 {
                         col = self.columns - 1;
