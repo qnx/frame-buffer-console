@@ -246,7 +246,7 @@ impl Escape {
     /// Convert a CSI graphics command to character attributes.
     /// Currently only handles foreground and background colours.
     fn sgr_to_attr(&self) -> EscapeResult {
-        let mut attr: u8 = 0;
+        let mut attr: u8 = DEFAULT_ATTR;
         for i in 0..self.params.len() {
             let param = self.params[i];
             if param == 0 {
