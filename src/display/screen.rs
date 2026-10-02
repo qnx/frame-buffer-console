@@ -1,6 +1,6 @@
 /// The logical contents of the screen
 
-use crate::display::{Rect, ScreenChar};
+use crate::display::*;
 use crate::display::font::Font;
 use crate::display::escape::*;
 use crate::display::cursor::*;
@@ -21,8 +21,6 @@ pub struct Screen {
     pub cr_to_nl: bool,
     /// Region of updated contents.
     dirty: Option<Rect>,
-    /// Default character attributes.
-    default_attr: u8,
     /// Current attributes.
     attr: u8,
     /// Escape sequence parser.
@@ -31,7 +29,7 @@ pub struct Screen {
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
     chr: ' ' as u8,
-    attr: 0x07
+    attr: DEFAULT_ATTR
 };
 
 impl Screen {
@@ -46,8 +44,7 @@ impl Screen {
             rows,
             dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
             cursor: Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 },
-            default_attr: 0x07,
-            attr: 0x07,
+            attr: DEFAULT_ATTR,
             esc: Escape::new(),
             cr_to_nl: false
         };
@@ -113,21 +110,25 @@ impl Screen {
     pub fn insert_at_cursor(&mut self, chrs: &[u8]) {
         // Mark starting position.
         let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
-        let mut iter = chrs.iter();
+        let mut pos = 0;
 
         // Resume parsing an escape sequence from a previous call.
+        // FIXME:
+        // This doesn't really handle all cases of resuming from a previous call.
+        // 1. An incomplete parameter
+        // 2. A sequence that ends in a parse error doesn't remember the accumulated characters
         if self.esc.is_active() {
-            self.maybe_escape(&mut insert, &mut iter);
+            pos += self.maybe_escape(&mut insert, chrs);
         }
 
         // Insert characters.
-        while let Some(chr) = iter.next() {
-            let chr = *chr;
+        while pos < chrs.len() {
+            let chr = chrs[pos];
             match chr {
                 b'\n' => self.newline(&mut insert),
                 0x07 => self.bell(),
                 0x08 => self.move_to(CursorDir::Back, 1, &mut insert),
-                0x1b => self.maybe_escape(&mut insert, &mut iter),
+                0x1b => pos += self.maybe_escape(&mut insert, &chrs[pos + 1..]),
                 b'\r' => {
                     if self.cr_to_nl {
                         self.newline(&mut insert)
@@ -137,6 +138,8 @@ impl Screen {
                 }
                 _ => self.insert_char(chr, &mut insert)
             }
+
+            pos += 1;
         }
 
         // Set new cursor position.
@@ -223,9 +226,11 @@ impl Screen {
 
     /// Handle a potential escape sequence.
     /// The function is called when the ESC character is encouneted in a stream.
-    fn maybe_escape(&mut self, insert: &mut Insert, iter: &mut std::slice::Iter<'_, u8>) {
+    fn maybe_escape(&mut self, insert: &mut Insert, data: &[u8]) -> usize {
         // Parse the escape sequence.
-        self.esc.parse(iter.clone(), self.default_attr);
+        if !self.esc.parse(data) {
+            return self.esc.len;
+        }
 
         // Act on the result.
         match self.esc.result {
@@ -240,12 +245,9 @@ impl Screen {
             _ => {}
         }
 
-        // Advance the iterator to after the escape sequence.
-        for _ in 0..self.esc.len {
-            iter.next();
-        }
-
+        let len = self.esc.len;
         self.esc.reset();
+        len
     }
 
     /// Update the insertion position based on the given direction.

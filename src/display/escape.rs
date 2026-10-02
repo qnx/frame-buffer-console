@@ -1,17 +1,21 @@
 /// Escape sequence parser.
 
+use crate::display::DEFAULT_ATTR;
+
 pub struct Escape {
     /// Parser state.
     state: State,
     /// Numeric parameters inside a CSI command.
     params: Vec<u32>,
+    /// CSI private prefix.
+    prefix: Option<u8>,
     /// Number of characters consumed (0 on parse error).
     pub len: usize,
     /// Parsing result.
     pub result: EscapeResult
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EscapeResult {
     /// Parsing failed.
     None,
@@ -27,6 +31,8 @@ pub enum EscapeResult {
     CUU(u32),
     /// Cursor position.
     CUP(u32, u32),
+    /// Device attributes 2.
+    DA2,
     /// Delete character.
     DCH(u32),
     /// Erase in line.
@@ -40,7 +46,8 @@ pub enum EscapeResult {
 #[derive(Debug, PartialEq)]
 enum State {
     Init,
-    CsiParameter,
+    CsiParam,
+    CsiParamValue,
     CsiIntermediate,
     Done,
     Error
@@ -49,7 +56,7 @@ enum State {
 impl Escape {
     pub fn new() -> Self {
         Escape { state: State::Init, params: Vec::<u32>::new(), len: 0,
-                 result: EscapeResult::None }
+                 result: EscapeResult::None, prefix: None }
     }
 
     pub fn reset(&mut self) {
@@ -57,46 +64,75 @@ impl Escape {
         self.len = 0;
         self.result = EscapeResult::None;
         self.params.clear();
+        self.prefix = None;
     }
 
     pub fn is_active(&self) -> bool {
         self.state != State::Init
     }
 
-    pub fn parse(&mut self, mut iter: std::slice::Iter<'_, u8>, attr: u8) {
+    /// Parse an escape sequence from the given bytes.
+    /// The function is intended to be restartable, allowing a resumption of parsing from an
+    /// incomplete state given more bytes.
+    /// Return true if parsing is complete (either successfully or not), or false if reached the
+    /// end of the bytes before an escape sequence terminated.
+    pub fn parse(&mut self, data: &[u8]) -> bool {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
         let mut final_char: u8 = 0;
+        let mut data_iter = data.into_iter();
+        let mut chr_opt = data_iter.next();
+        let mut next: bool = false;
+
         loop {
-            // Get the next character, aborting if reached the end before the Done state.
-            let chr = match iter.next() {
+            let chr = match chr_opt {
                 Some(chr) => *chr,
-                None => { break; }
+                None => break
             };
 
             // Escape sequence state machine.
             self.state = match self.state {
                 State::Init => {
+                    // Look for [ as the beginning of CSI.
                     match chr {
-                        b'[' => State::CsiParameter,
+                        b'[' => { next = true; State::CsiParam },
                         _ => State::Error
                     }
                 },
-                State::CsiParameter => {
+                State::CsiParam => {
+                    // Parameter, private sequence indicator or final character.
                     if chr >= b'0' && chr <= b'9' {
-                        param = (param * 10) + (chr - b'0') as u32;
-                        State::CsiParameter
-                    } else if chr == b';' {
-                        param_done = true;
-                        State::CsiParameter
-                    } else if chr == b'?' {
-                        // Private sequence?
-                        State::CsiParameter
-                    } else if chr == b'>' {
-                        // Private sequence?
-                        State::CsiParameter
+                        next = false;
+                        State::CsiParamValue
+                    } else if chr == b'?' || chr == b'>' {
+                        self.prefix = Some(chr);
+                        next = true;
+                        State::CsiParamValue
                     } else if chr >= 0x20 && chr < 0x2f {
                         param_done = true;
+                        next = true;
+                        State::CsiIntermediate
+                    } else if chr >= 0x40 && chr <= 0x7e {
+                        param_done = true;
+                        final_char = chr;
+                        State::Done
+                    } else {
+                        State::Error
+                    }
+                }
+                State::CsiParamValue => {
+                    // Number, parameter separator (;), intermediate or final character.
+                    if chr >= b'0' && chr <= b'9' {
+                        param = (param * 10) + (chr - b'0') as u32;
+                        next = true;
+                        State::CsiParamValue
+                    } else if chr == b';' {
+                        param_done = true;
+                        next = true;
+                        State::CsiParamValue
+                    } else if chr >= 0x20 && chr < 0x2f {
+                        param_done = true;
+                        next = true;
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         param_done = true;
@@ -107,7 +143,9 @@ impl Escape {
                     }
                 }
                 State::CsiIntermediate => {
+                    // Another intermediate or final character.
                     if chr >= 0x20 && chr < 0x2f {
+                        next = true;
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         final_char = chr;
@@ -122,11 +160,15 @@ impl Escape {
             // Abort on a parse error.
             if self.state == State::Error {
                 self.len = 0;
-                break;
+                self.result = EscapeResult::None;
+                return true;
             }
 
-            // Character consumed.
-            self.len += 1;
+            if next {
+                // Character consumed.
+                self.len += 1;
+                chr_opt = data_iter.next();
+            }
 
             // Add a parsed numeric parameter.
             if param_done {
@@ -139,7 +181,7 @@ impl Escape {
             if self.state == State::Done {
                 // Process sequence based on the final character.
                 self.result = match final_char {
-                    b'm' => self.sgr_to_attr(attr),
+                    b'm' => self.sgr_to_attr(),
                     b'C' => EscapeResult::CUF(self.param(0, 1)),
                     b'D' => EscapeResult::CUB(self.param(0, 1)),
                     b'P' => EscapeResult::DCH(self.param(0, 1)),
@@ -147,22 +189,36 @@ impl Escape {
                     b'J' => EscapeResult::ED(self.param(0, 0)),
                     b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
                     b'@' => EscapeResult::ICH(self.param(0, 1)),
-                    _ => { println!("Unhandled escape sequence {}", final_char as char);
-                           EscapeResult::None }
+                    b'c' => match self.prefix {
+                        Some(b'>') => EscapeResult::DA2,
+                        _ => EscapeResult::None
+                    }
+                    _ => EscapeResult::None
                 };
 
-                return;
+                if self.result == EscapeResult::None {
+                    let mut str = String::new();
+                    for chr in &data[0..self.len] {
+                        str.push(*chr as char);
+                    }
+
+                    println!("Unhandled escape sequence '{str}'");
+                }
+
+                return true;
             }
         }
+
+        false
     }
 
-    fn sgr_to_attr(&self, default_attr: u8) -> EscapeResult {
-        let mut attr: u8 = default_attr;
+    fn sgr_to_attr(&self) -> EscapeResult {
+        let mut attr: u8 = 0;
         for i in 0..self.params.len() {
             let param = self.params[i];
             if param == 0 {
                 // Reset.
-                attr = default_attr;
+                attr = DEFAULT_ATTR;
             } else if param == 7 || param == 27 {
                 // Reverse video.
                 attr = (attr >> 4) | (attr & 0xf) << 4;

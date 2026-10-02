@@ -50,6 +50,8 @@ const PALETTE: [u32; 16] = [
     0xFFFFFFFF, // 15 - bright white
 ];
 
+pub const DEFAULT_ATTR: u8 = 0x7;
+
 #[derive(Clone, Copy, Debug)]
 struct Rect {
     left: u32,
