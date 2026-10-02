@@ -117,10 +117,8 @@ impl Escape {
                         self.prefix = Some(chr);
                         State::CsiParamValue
                     } else if chr >= 0x20 && chr < 0x2f {
-                        param_done = true;
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
-                        param_done = true;
                         next = false;
                         State::CsiFinal
                     } else {
@@ -211,8 +209,6 @@ impl Escape {
                 if self.result == EscapeResult::None {
                     let str = bytes_to_string(&data[0..self.len]);
                     println!("Unhandled escape sequence '{str}'");
-                } else {
-                    println!("{:?}", self.result);
                 }
 
                 return true;
