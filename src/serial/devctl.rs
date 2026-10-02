@@ -18,6 +18,11 @@ const DCMD_CHR_TCSETATTR : u32 = 0x804c7414;
 const DCMD_CHR_TCSETATTRD : u32 = 0x804c7415;
 const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
 const DCMD_CHR_TCSETSIZE : u32 = 0x80087467;
+const DCMD_CHR_TCFLUSH: u32 = 0x80047410;
+
+const TCIFLUSH: i32 = 0;
+const TCOFLUSH: i32 = 1;
+const TCIOFLUSH: i32 = 2;
 
 #[repr(C, packed)]
 struct GetflagsReply {
@@ -103,6 +108,7 @@ impl SerialServer {
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             DCMD_CHR_TCSETSIZE => self.tcsetsize(payload, trans),
             DCMD_CHR_TTYINFO => self.ttyinfo(trans),
+            DCMD_CHR_TCFLUSH => self.tcflush(payload, trans),
             _ => { println!("devctl {:x}", dcmd); Err(libc::ENOSYS) }
         }
     }
@@ -308,6 +314,25 @@ impl SerialServer {
         };
 
         trans.reply_with_payload(0, &reply);
+        Ok(())
+    }
+
+    /// Discard pending data.
+    /// For this device, applies only to the input buffer, as all output is processed immediately.
+    fn tcflush(&mut self, payload: &[u8], trans: &mut Transaction) -> Result<(), i32> {
+        let which = match transmute_payload::<i32>(payload) {
+            Ok(which) => which,
+            Err(_) => { return Err(libc::EBADMSG); }
+        };
+
+        match *which {
+            TCIFLUSH => self.input_buffer.flush(),
+            TCOFLUSH => self.input_buffer.flush(),
+            TCIOFLUSH => {},
+            _ => { return Err(libc::EINVAL); }
+        };
+
+        trans.reply(0);
         Ok(())
     }
 }

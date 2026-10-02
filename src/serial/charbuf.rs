@@ -56,6 +56,11 @@ impl CharBuf {
         pop_count
     }
 
+    /// Remove all elements from the queue.
+    pub fn flush(&mut self) {
+        self.pop(self.count);
+    }
+
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
