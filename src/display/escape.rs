@@ -159,6 +159,9 @@ impl Escape {
 
             // Abort on a parse error.
             if self.state == State::Error {
+                let str = bytes_to_string(&data[0..self.len + 1]);
+                println!("Escape parse error '{str}'");
+
                 self.len = 0;
                 self.result = EscapeResult::None;
                 return true;
@@ -197,11 +200,7 @@ impl Escape {
                 };
 
                 if self.result == EscapeResult::None {
-                    let mut str = String::new();
-                    for chr in &data[0..self.len] {
-                        str.push(*chr as char);
-                    }
-
+                    let str = bytes_to_string(&data[0..self.len]);
                     println!("Unhandled escape sequence '{str}'");
                 }
 
@@ -247,4 +246,13 @@ impl Escape {
             default
         }
     }
+}
+
+fn bytes_to_string(bytes: &[u8]) -> String {
+    let mut str = String::new();
+    for chr in bytes {
+        str.push(*chr as char);
+    }
+
+    str
 }
