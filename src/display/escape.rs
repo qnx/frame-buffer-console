@@ -49,6 +49,8 @@ enum State {
     CsiParam,
     CsiParamValue,
     CsiIntermediate,
+    String,
+    StringTerminator,
     Done,
     Error
 }
@@ -82,7 +84,6 @@ impl Escape {
         let mut final_char: u8 = 0;
         let mut data_iter = data.into_iter();
         let mut chr_opt = data_iter.next();
-        let mut next: bool = false;
 
         loop {
             let chr = match chr_opt {
@@ -90,12 +91,18 @@ impl Escape {
                 None => break
             };
 
+            // true to consume the character, false to repeat it after changing state.
+            let mut next: bool = true;
+
             // Escape sequence state machine.
             self.state = match self.state {
                 State::Init => {
-                    // Look for [ as the beginning of CSI.
                     match chr {
-                        b'[' => { next = true; State::CsiParam },
+                        b'[' => State::CsiParam, // CSI
+                        b'P' => State::String,   // Device Control String
+                        b']' => State::String,   // Operating System Command
+                        b'^' => State::String,   // Privacy Message
+                        b'_' => State::String,   // Application Program Command
                         _ => State::Error
                     }
                 },
@@ -106,11 +113,9 @@ impl Escape {
                         State::CsiParamValue
                     } else if chr == b'?' || chr == b'>' {
                         self.prefix = Some(chr);
-                        next = true;
                         State::CsiParamValue
                     } else if chr >= 0x20 && chr < 0x2f {
                         param_done = true;
-                        next = true;
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         param_done = true;
@@ -124,15 +129,12 @@ impl Escape {
                     // Number, parameter separator (;), intermediate or final character.
                     if chr >= b'0' && chr <= b'9' {
                         param = (param * 10) + (chr - b'0') as u32;
-                        next = true;
                         State::CsiParamValue
                     } else if chr == b';' {
                         param_done = true;
-                        next = true;
                         State::CsiParamValue
                     } else if chr >= 0x20 && chr < 0x2f {
                         param_done = true;
-                        next = true;
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         param_done = true;
@@ -145,7 +147,6 @@ impl Escape {
                 State::CsiIntermediate => {
                     // Another intermediate or final character.
                     if chr >= 0x20 && chr < 0x2f {
-                        next = true;
                         State::CsiIntermediate
                     } else if chr >= 0x40 && chr <= 0x7e {
                         final_char = chr;
@@ -154,13 +155,32 @@ impl Escape {
                         State::Error
                     }
                 }
+                State::String => {
+                    if chr >= 0x20 && chr <= 0x7e {
+                        State::String
+                    } else if chr >= 0x08 && chr <= 0x0d {
+                        State::String
+                    } else if chr == 0x1b {
+                        State::StringTerminator
+                    } else if chr == 0x7 {
+                        State::Done     // xterm string terminator
+                    } else {
+                        State::Error
+                    }
+                }
+                State::StringTerminator => {
+                    match chr {
+                        b'\\' => State::Done,
+                        _ => State::Error
+                    }
+                }
                 _ => State::Error
             };
 
             // Abort on a parse error.
             if self.state == State::Error {
                 let str = bytes_to_string(&data[0..self.len + 1]);
-                println!("Escape parse error '{str}'");
+                println!("Escape parse error {:?} '{str}'", data);
 
                 self.len = 0;
                 self.result = EscapeResult::None;
