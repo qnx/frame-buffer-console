@@ -33,7 +33,7 @@ impl<NodeT> NodeTable<NodeT> {
         self.table.remove(path)
     }
 
-    pub fn iter(&self) -> NodeTableIter<NodeT> {
+    pub fn iter(&self) -> NodeTableIter<'_, NodeT> {
         self.table.iter()
     }
 }
