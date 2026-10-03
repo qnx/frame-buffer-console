@@ -73,33 +73,43 @@ impl Screen {
     /// The region is combined with the existing dirty rectangle.
     fn set_dirty(&mut self, rect: &Rect) -> bool {
         let mut is_dirty = false;
-        if let Some(mut dirty) = self.dirty {
-            if rect.left < dirty.left {
-                dirty.left = rect.left;
-                is_dirty = true;
-            }
+        let mut dirty = match self.dirty {
+            Some(mut dirty) => {
+                // Update existing rectangle.
+                if rect.left < dirty.left {
+                    dirty.left = rect.left;
+                    is_dirty = true;
+                }
 
-            if rect.right > dirty.right {
-                dirty.right = std::cmp::min(rect.right, self.columns - 1);
-                is_dirty = true;
-            }
+                if rect.right > dirty.right {
+                    dirty.right = rect.right;
+                    is_dirty = true;
+                }
 
-            if rect.top < dirty.top {
-                dirty.top = rect.top;
-                is_dirty = true;
-            }
+                if rect.top < dirty.top {
+                    dirty.top = rect.top;
+                    is_dirty = true;
+                }
 
-            if rect.bottom > dirty.bottom {
-                dirty.bottom = std::cmp::min(rect.bottom, self.rows - 1);
-                is_dirty = true;
-            }
+                if rect.bottom > dirty.bottom {
+                    dirty.bottom = rect.bottom;
+                    is_dirty = true;
+                }
 
-            if is_dirty {
-                self.dirty = Some(dirty);
+                dirty
             }
-        } else {
-            self.dirty = Some(*rect);
-            is_dirty = true;
+            None => {
+                // Accept new rectangle.
+                is_dirty = true;
+                *rect
+            }
+        };
+
+        if is_dirty {
+            // Clip to screen size.
+            dirty.right = std::cmp::min(dirty.right, self.columns - 1);
+            dirty.bottom = std::cmp::min(dirty.bottom, self.rows - 1);
+            self.dirty = Some(dirty);
         }
 
         is_dirty
