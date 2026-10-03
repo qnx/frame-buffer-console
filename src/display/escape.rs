@@ -224,6 +224,8 @@ impl Escape {
         // Process sequence based on the final character.
         self.result = match final_char {
             b'm' => self.sgr_to_attr(),
+            b'A' => EscapeResult::CUU(self.param(0, 1)),
+            b'B' => EscapeResult::CUD(self.param(0, 1)),
             b'C' => EscapeResult::CUF(self.param(0, 1)),
             b'D' => EscapeResult::CUB(self.param(0, 1)),
             b'P' => EscapeResult::DCH(self.param(0, 1)),
