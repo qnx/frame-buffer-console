@@ -287,9 +287,18 @@ impl IoMsgImpl for SerialServer {
     fn close(&mut self, trans: &Transaction) -> Result<(), i32> {
         match self.connection_table.remove(trans.connection_id()) {
             Some(_) => {
+                let (pid, coid) = trans.connection_id();
+                if let Some(read_trans) = &mut self.read {
+                    // Release a pending read on this connection.
+                    let read_id = read_trans.connection_id();
+                    if read_id.0 == pid && read_id.1 == coid {
+                        read_trans.error(libc::EBADF);
+                        self.read = None
+                    }
+                }
+
                 if let Some(job) = &mut self.job {
                     // Determine if the close comes from the fd that registered the connection.
-                    let (pid, coid) = trans.connection_id();
                     if (job.sess_fd_pid == pid) && (job.sess_fd_coid == coid) {
                         // Connection closed.
                         println!("Session closed");
