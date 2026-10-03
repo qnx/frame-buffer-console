@@ -274,7 +274,13 @@ impl IoMsgImpl for SerialServer {
         if !self.input_buffer.is_empty() {
             reply.flags = libc_missing::_NOTIFY_COND_INPUT
         } else if arm {
-            self.notify = Some(NotifyClient { rcvid: trans.get_rcvid(), event: msg.event });
+            let (pid, coid) = trans.connection_id();
+            self.notify = Some(NotifyClient {
+                rcvid: trans.get_rcvid(),
+                pid,
+                coid,
+                event: msg.event
+            });
         } else {
             // Nothing to do.
         }
@@ -294,6 +300,13 @@ impl IoMsgImpl for SerialServer {
                     if read_id.0 == pid && read_id.1 == coid {
                         read_trans.error(libc::EBADF);
                         self.read = None
+                    }
+                }
+
+                if let Some(notify) = &mut self.notify {
+                    // Release a pending read on this connection.
+                    if notify.pid == pid && notify.coid == coid {
+                        self.notify = None
                     }
                 }
 

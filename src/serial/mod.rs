@@ -62,6 +62,8 @@ struct JobControl {
 /// A client event registered for notification when input is available
 struct NotifyClient {
     rcvid: i64,
+    pid: i64,
+    coid: i32,
     event: libc::sigevent
 }
 
