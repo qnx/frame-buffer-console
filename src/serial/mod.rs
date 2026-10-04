@@ -1,6 +1,6 @@
 mod iomsg;
 mod devctl;
-mod charbuf;
+mod inputbuffer;
 mod termios;
 mod lineeditor;
 
@@ -12,7 +12,7 @@ use crate::qnxmsg::transaction::Transaction;
 use crate::qnxmsg::mount::Mount;
 use crate::qnxmsg::message_loop::message_loop;
 use crate::display::Display;
-use crate::serial::charbuf::CharBuf;
+use crate::serial::inputbuffer::InputBuffer;
 use crate::serial::lineeditor::LineEditor;
 use crate::serial::termios::*;
 use crate::hid::key::*;
@@ -30,7 +30,7 @@ pub struct SerialServer {
     /// Job control data.
     job: Option<JobControl>,
     /// Characters that have not been read.
-    input_buffer: CharBuf,
+    input_buffer: InputBuffer,
     /// LineEditor line editor.
     lineedit: LineEditor,
     /// Read transaction waiting for a reply.
@@ -76,7 +76,7 @@ impl SerialServer {
             display: display.clone(),
             perms: FilePerms::new(0, 0, 0o666),
             job: None,
-            input_buffer: CharBuf::new(),
+            input_buffer: InputBuffer::new(),
             lineedit: LineEditor::new(),
             read: None,
             notify: None,
