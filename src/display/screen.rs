@@ -7,10 +7,7 @@ use crate::display::cursor::*;
 
 pub struct Screen {
     /// Screen contents (character and attrbitute for each position).
-    buffer: Vec<ScreenChar>,
-    /// Row representing the logical top of the buffer.
-    /// Changes with scrolling.
-    buffer_top_row: u32,
+    buffer: ScreenBuffer,
     /// Horizontal size in characters.
     pub columns: u32,
     /// Vertical size in characters.
@@ -37,9 +34,8 @@ impl Screen {
         // Calculate the number of columns and rows.
         let columns = width / font.width as u32;
         let rows = height / font.height as u32;
-        let mut screen = Screen {
-            buffer: Vec::<ScreenChar>::new(),
-            buffer_top_row: 0,
+        Ok(Screen {
+            buffer: ScreenBuffer::new(columns, rows),
             columns,
             rows,
             dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
@@ -47,19 +43,13 @@ impl Screen {
             attr: DEFAULT_ATTR,
             escape: Escape::new(),
             cr_to_nl: false
-        };
-
-        // Start with a clear screen.
-        // FIXME:
-        // Would like to report allocation error rather than panic.
-        screen.buffer.resize((columns * rows) as usize, BLANK_CHAR);
-        Ok(screen)
+        })
     }
 
     /// Get the character at the given column and row.
-    pub fn char_at(&self, col: u32, row: u32) -> &ScreenChar {
-        let row = (row + self.buffer_top_row) % self.rows;
-        &self.buffer[((row * self.columns) + col) as usize]
+    pub fn char_at(&self, col: u32, row: u32) -> ScreenChar {
+        let idx = ((row * self.columns) + col) as usize;
+        self.buffer.get_char(idx)
     }
 
     /// Get the current dirty rectangle and reset to an empty one.
@@ -170,10 +160,9 @@ impl Screen {
     pub fn insert_line(&mut self, chrs: &[u8], row: u32, col: u32, cursor_col: u32) {
         // Add characters.
         let mut insert = Insert::new(self, col, row);
-        let mut iter = chrs.iter();
 
         // Insert characters.
-        while let Some(chr) = iter.next() {
+        for chr in chrs {
             let chr = *chr;
 
             // Stop at a newline.
@@ -185,13 +174,14 @@ impl Screen {
             // The line may exceed the width of the screen. Drop extra characters, but keep
             // processing to detect a newline.
             if insert.col < self.columns {
-                self.buffer[insert.bufidx] = ScreenChar { chr, attr: self.attr };
+                self.buffer.set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
                 insert.bufidx += 1;
                 insert.col += 1;
             }
         }
 
         // Set new cursor position.
+        self.check_scroll(&mut insert);
         self.cursor.col = cursor_col;
         self.cursor.row = insert.row;
         insert.update_rect(insert.col, insert.row);
@@ -205,7 +195,7 @@ impl Screen {
         self.check_scroll(insert);
 
         // Update the buffer with the given character.
-        self.buffer[insert.bufidx] = ScreenChar { chr, attr: self.attr };
+        self.buffer.set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
         insert.bufidx += 1;
 
         // Update bounding rectangle of this insertion.
@@ -323,11 +313,11 @@ impl Screen {
     /// Delete num characters from the current position.
     fn delete(&mut self, num: u32, insert: &mut Insert) {
         for i in 0..num as usize {
-            if (insert.bufidx + i) == self.buffer.len() {
+            if (insert.bufidx + i) == self.buffer.size() {
                 break;
             }
 
-            self.buffer[insert.bufidx + i] = BLANK_CHAR;
+            self.buffer.set_char(insert.bufidx + i, BLANK_CHAR);
         }
     }
 
@@ -347,7 +337,7 @@ impl Screen {
         };
 
         for idx in first_idx..(first_idx + count as usize) {
-            self.buffer[idx] = BLANK_CHAR;
+            self.buffer.set_char(idx, BLANK_CHAR);
         }
 
         // Assume the entire line needs to be updated.
@@ -364,14 +354,14 @@ impl Screen {
         self.check_scroll(insert);
 
         let (first_idx, last_idx) = match how {
-            0 => (insert.bufidx, self.buffer.len() - 1),
+            0 => (insert.bufidx, self.buffer.size() - 1),
             1 => (0, insert.bufidx),
-            2 => (0, self.buffer.len() - 1),
+            2 => (0, self.buffer.size() - 1),
             _ => { return; }
         };
 
         for idx in first_idx..=last_idx {
-            self.buffer[idx] = BLANK_CHAR;
+            self.buffer.set_char(idx, BLANK_CHAR);
         }
 
         // Assume the entire screen needs to be updated.
@@ -390,10 +380,10 @@ impl Screen {
         // Move characters in the line.
         let eolidx = ((row + 1) * self.columns) as usize - num;
         for idx in (insert.bufidx..eolidx).rev() {
-            self.buffer[idx + num] = self.buffer[idx];
+            self.buffer.set_char(idx + num, self.buffer.get_char(idx));
         }
         for idx in 0..num {
-            self.buffer[insert.bufidx + idx] = BLANK_CHAR;
+            self.buffer.set_char(insert.bufidx + idx, BLANK_CHAR);
         }
 
         // Mark the line as dirty.
@@ -406,18 +396,12 @@ impl Screen {
             return;
         }
 
-        // Clear the line to become the new bottom row.
-        assert_eq!(insert.col, 0);
-        insert.bufidx = (self.buffer_top_row * self.columns) as usize;
-        for i in 0..self.columns as usize {
-            self.buffer[insert.bufidx + i] = BLANK_CHAR;
-        }
+        // Rotate the buffer.
+        self.buffer.scroll();
 
         // Now inserting into the new bottom row.
         insert.row -= 1;
-
-        // Rotate the screen buffer.
-        self.buffer_top_row = (self.buffer_top_row + 1) % self.rows;
+        insert.bufidx = (insert.row * self.columns) as usize;
 
         // The entire screen needs to be updated.
         self.dirty = Some(self.full_rect());
@@ -426,6 +410,56 @@ impl Screen {
     /// Return a rectangle encompassing the entire screen
     fn full_rect(&self) -> Rect {
         Rect { left: 0, top: 0, right: self.columns - 1, bottom: self.rows - 1 }
+    }
+}
+
+/// Character and attribute buffer with scrolling.
+struct ScreenBuffer {
+    /// The buffer
+    data: Vec<ScreenChar>,
+    /// Number of characters in a line
+    stride: usize,
+    /// Index of the top-left position in the buffer
+    head: usize
+}
+
+impl ScreenBuffer {
+    /// Create a new screen buffer for the given size.
+    pub fn new(columns: u32, rows: u32) -> Self {
+        let size = (columns * rows) as usize;
+        let mut data = Vec::<ScreenChar>::with_capacity(size);
+        data.resize(size, BLANK_CHAR);
+
+        ScreenBuffer {
+            data,
+            head: 0,
+            stride: columns as usize
+        }
+    }
+
+    /// Retreive the character at the given index.
+    pub fn get_char(&self, index: usize) -> ScreenChar {
+        let index = (self.head + index) % self.data.len();
+        self.data[index]
+    }
+
+    /// Update the character at the given index.
+    pub fn set_char(&mut self, index: usize, chr: ScreenChar) {
+        let index = (self.head + index) % self.data.len();
+        self.data[index] = chr;
+    }
+
+    pub fn size(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Scroll one line by adjusting the head position and clearing the line that is now at the
+    /// bottom of the screen.
+    pub fn scroll(&mut self) {
+        self.head = (self.head + self.stride) % self.data.len();
+        for i in 0..self.stride {
+            self.data[self.head + i] = BLANK_CHAR;
+        }
     }
 }
 
@@ -443,11 +477,10 @@ struct Insert {
 
 impl Insert {
     pub fn new(screen: &Screen, col: u32, row: u32) -> Self {
-        let buf_row = (screen.buffer_top_row + row) % screen.rows;
         Insert {
             col,
             row,
-            bufidx: (buf_row * screen.columns + col) as usize,
+            bufidx: (row * screen.columns + col) as usize,
             rect: Rect { left: col, right: col, top: row, bottom: row }
         }
     }
