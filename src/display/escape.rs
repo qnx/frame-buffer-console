@@ -206,11 +206,7 @@ impl Escape {
 
             // Check for end of parsing.
             if self.state == State::Done {
-                if self.result == EscapeResult::None {
-                    let str = bytes_to_string(&data[0..self.len]);
-                    println!("Unhandled escape sequence '{str}'");
-                }
-
+                self.debug_unhandled(data);
                 return true;
             }
         }
@@ -276,6 +272,16 @@ impl Escape {
             self.params[which]
         } else {
             default
+        }
+    }
+
+    fn debug_unhandled(&self, _data: &[u8]) {
+        #[cfg(debug_assertions)]
+        {
+            if self.result == EscapeResult::None {
+                let str = bytes_to_string(&_data[0..self.len]);
+                println!("Unhandled escape sequence '{str}'");
+            }
         }
     }
 }
