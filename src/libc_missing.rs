@@ -14,6 +14,9 @@ pub const _NOTIFY_ACTION_POLLARM: u32 = 0x3;
 pub const _NOTIFY_COND_INPUT: u32 = 0x10000000;
 pub const _NOTIFY_COND_OUTPUT: u32 = 0x20000000;
 pub const _NOTIFY_COND_OBAND: u32 = 0x40000000;
+pub const _CS_HOSTNAME: i32 = 2;
+pub const _CS_RELEASE: i32 = 3;
+pub const _CS_MACHINE: i32 = 5;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug, Default)]
