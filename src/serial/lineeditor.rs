@@ -1,4 +1,16 @@
-/// Line editing in canonical mode.
+// Copyright (c) 2026 BlackBerry Limited.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // FIXME:
 // Add support for a line that exceeds the screen size with horizontal scrolling.
@@ -8,6 +20,7 @@ use crate::hid::key::*;
 
 const LINE_SIZE: usize = 256;
 
+/// Line editing in canonical mode.
 pub struct LineEditor {
     /// Line buffer.
     buffer: [u8; LINE_SIZE],
