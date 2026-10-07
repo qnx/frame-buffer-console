@@ -4,10 +4,17 @@ use crate::libc_missing;
 
 #[derive(Debug)]
 pub struct FrameBuffer {
-    pub addr: u64,
+    /// Virtual address of the mapped hardware frame buffer.
+    pub hw_addr: u64,
+    /// Virtual address of a software buffer used for double-buffering.
+    pub sw_addr: u64,
+    /// Size of the buffer, in bytes.
     pub size: u32,
+    /// Horizontial resolution in pixels.
     pub width: u32,
+    /// Vertical resolution in pixels.
     pub height: u32,
+    /// Number of pixels per row.
     pub stride: u32
 }
 
@@ -46,32 +53,50 @@ fn hwi_framebuffer() -> Result<HwiFrameBuffer, ()> {
 }
 
 /// Map the physical address of the frame buffer.
-fn map_framebuffer(paddr: u64, len: usize) -> Result<u64, ()> {
-    let vaddr = unsafe {
+fn map_framebuffer(paddr: u64, len: usize) -> Result<(u64, u64), ()> {
+    let hw_addr = unsafe {
             libc::mmap(std::ptr::null_mut(), len,
                        libc::PROT_READ | libc::PROT_WRITE | libc_missing::PROT_NOCACHE,
                        libc::MAP_SHARED | libc_missing::MAP_PHYS, -1, paddr as i64)
     };
 
-    if vaddr == libc::MAP_FAILED {
+    if hw_addr == libc::MAP_FAILED {
         println!("Failed to map frame buffer");
         return Err(());
     }
 
-    Ok(vaddr as u64)
+    let sw_addr = unsafe {
+            libc::mmap(std::ptr::null_mut(), len,
+                       libc::PROT_READ | libc::PROT_WRITE,
+                       libc::MAP_PRIVATE | libc::MAP_ANON, -1, 0)
+    };
+
+    if sw_addr == libc::MAP_FAILED {
+        println!("Failed to map frame buffer");
+        return Err(());
+    }
+
+    Ok((hw_addr as u64, sw_addr as u64))
 }
 
 impl FrameBuffer {
     pub fn new() -> Result<FrameBuffer, ()> {
         let hfb = hwi_framebuffer()?;
-        let addr = map_framebuffer(hfb.buffer, hfb.bufsize as usize)?;
-        Ok(FrameBuffer { addr, size: hfb.bufsize, width: hfb.hres, height: hfb.vres,
+        let (hw_addr, sw_addr) = map_framebuffer(hfb.buffer, hfb.bufsize as usize)?;
+        Ok(FrameBuffer { hw_addr, sw_addr, size: hfb.bufsize, width: hfb.hres, height: hfb.vres,
                          stride: hfb.stride })
     }
 
     /// Write a value into the frame buffer.
     pub fn set_pixel(&self, pixel: u64, value: u32) {
         assert!(pixel < self.size as u64);
-        unsafe { *((self.addr + pixel) as *mut u32) = value };
+        unsafe { *((self.sw_addr + pixel) as *mut u32) = value };
+    }
+
+    pub fn update(&self) {
+        unsafe {
+            libc::memcpy(self.hw_addr as *mut libc::c_void, self.sw_addr as *const libc::c_void,
+                         self.size as usize);
+        };
     }
 }

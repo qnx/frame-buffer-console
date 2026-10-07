@@ -150,12 +150,15 @@ fn screen_update_thread(display: Arc<DisplayObj>) {
     }
 }
 
+/// Draw a portion of the screen as defined by the given rectangle.
 fn draw_screen(display: &DisplayObj, screen: &Screen, rect: &Rect) {
     for row in rect.top..=rect.bottom {
         for col in rect.left..=rect.right {
             draw_glyph(&display, screen, col, row);
         }
     }
+
+    display.framebuffer.update();
 }
 
 /// Draw the glyph of a given character into the frame buffer at the specified column and row.
