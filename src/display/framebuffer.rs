@@ -100,16 +100,20 @@ impl FrameBuffer {
                          stride: hfb.stride })
     }
 
-    /// Write a value into the frame buffer.
+    /// Write a value into the software buffer.
+    /// A call to update() is required to copy the contents to the hardware buffer.
     pub fn set_pixel(&self, pixel: u64, value: u32) {
         assert!(pixel < self.size as u64);
         unsafe { *((self.sw_addr + pixel) as *mut u32) = value };
     }
 
+    /// Copy the contents of the software buffer to the mapped hardware buffer.
     pub fn update(&self) {
         unsafe {
-            libc::memcpy(self.hw_addr as *mut libc::c_void, self.sw_addr as *const libc::c_void,
-                         self.size as usize);
+            std::ptr::copy_nonoverlapping(
+                self.sw_addr as *const u8,
+                self.hw_addr as *mut u8,
+                self.size as usize)
         };
     }
 }
