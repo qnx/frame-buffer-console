@@ -17,8 +17,7 @@
 use libc;
 
 pub const HWI_NULL_OFF: u16 = 0xffff;
-pub const PROT_NOCACHE: libc::c_int = 0x0000_0800;
-pub const MAP_PHYS: libc::c_int = 0x0001_0000;
+pub const SHMCTL_PHYS: libc::c_int = 2;
 pub const _NTO_DUPFD_VERIFY: libc::c_int = 5;
 pub const PROCMGR_SESSION_SETPGRP: u32 = 2;
 pub const PROCMGR_SESSION_SIGNAL_PGRP: u32 = 4;
@@ -31,6 +30,12 @@ pub const _NOTIFY_COND_OBAND: u32 = 0x40000000;
 pub const _CS_HOSTNAME: i32 = 2;
 pub const _CS_RELEASE: i32 = 3;
 pub const _CS_MACHINE: i32 = 5;
+
+#[cfg(target_arch = "x86_64")]
+pub const X86_64_PTE_MTYPE_WC: libc::c_int = 0x10;
+
+#[cfg(target_arch = "aarch64")]
+pub const AARCH64_PTE_SODEV: libc::c_int = 0x1;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -57,6 +62,9 @@ unsafe extern "C" {
 
     pub fn rsrcdbmgr_devno_attach(name: *const libc::c_char, minor_request: libc::c_int,
                                   flags: libc::c_int) -> libc::dev_t;
+
+    pub fn shm_ctl_special(fd: libc::c_int, flags: libc::c_int, paddr: u64, size: u64,
+                           special: u32) -> i32;
 
     // The following are in the C library crate, but use the wrong type for receive IDs.
     pub fn MsgReceive_r(chid: i32, msg: *mut libc::c_void, bytes: usize,
