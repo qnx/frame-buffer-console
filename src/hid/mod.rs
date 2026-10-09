@@ -154,6 +154,7 @@ fn poll_thread(fd: i32, channel: Channel) {
     }
 }
 
+/// Handle a device insertion event.
 fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Keyboard>) {
     // Do nothing if we already have a keyboard device.
     if device.is_some() {
@@ -218,6 +219,7 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Keyboard>) {
     *device = Some(Keyboard::new(device_number, report.input_report_len));
 }
 
+/// Handle a device removal event.
 fn device_removed(event: &HidEvent, device: &mut Option<Keyboard>) {
     let keyboard = match device {
         Some(device) => device,
@@ -234,6 +236,7 @@ fn device_removed(event: &HidEvent, device: &mut Option<Keyboard>) {
     }
 }
 
+/// Handle a HID report event.
 fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
                    channel: &Channel) {
     let device = match device {
@@ -264,7 +267,10 @@ fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
 
     let key = input_report.as_key();
     if let Some(key) = device.key_pressed(key) {
-        SerialServer::emit_key_event(channel, key).unwrap();
+        // FIXME:
+        // This will crash if a pulse cannot be emitted (e.g., OOM).
+        // Consider alternatives.
+        channel.send_pulse(-1, 0, key.to_pulse_value()).unwrap();
     }
 }
 

@@ -70,4 +70,18 @@ impl Channel {
         }
         Ok(rcvid)
     }
+
+    /// Send a pulse on this channel.
+    pub fn send_pulse(&self, priority: i32, code: i8, value: i64) -> Result<(), i32> {
+        let chid = self.chid;
+        let err = unsafe {
+            libc_missing::MsgSendPulse_r(-chid, priority, code as i32, value)
+        };
+
+        if err != 0 {
+            return Err(err);
+        }
+
+        Ok(())
+    }
 }

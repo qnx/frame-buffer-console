@@ -110,21 +110,10 @@ impl SerialServer {
         message_loop(self, self.channel);
     }
 
+    /// Expose the internal channel.
+    /// Used to deliver pulses from other components.
     pub fn get_channel(&self) -> Channel {
         self.channel
-    }
-
-    pub fn emit_key_event(channel: &Channel, key: Key) -> Result<(), i32> {
-        let chid = channel.chid;
-        let err = unsafe {
-            libc_missing::MsgSendPulse_r(-chid, -1, 0, key.to_pulse_value())
-        };
-
-        if err != 0 {
-            return Err(err);
-        }
-
-        Ok(())
     }
 
     /// Determine if this device is the controlling terminal for the given session ID.
