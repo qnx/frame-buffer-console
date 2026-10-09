@@ -18,6 +18,7 @@ mod inputbuffer;
 mod termios;
 mod lineeditor;
 
+use std::ffi::CStr;
 use crate::libc_missing;
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
@@ -52,7 +53,9 @@ pub struct SerialServer {
     /// A client event to emit when input is available.
     notify: Option<NotifyClient>,
     /// Terminal attributes
-    attr: TerminalAttributes
+    attr: TerminalAttributes,
+    /// System-allocated device number
+    devno: libc::dev_t
 }
 
 /// Information for an open connection.
@@ -83,6 +86,8 @@ struct NotifyClient {
 
 impl SerialServer {
     pub fn new(display: &Display) -> Self {
+        let devno = rsrcdbmgr_devno_attach(c"char-", -1);
+
         // Create the server object.
         let server = SerialServer {
             channel: Channel::new(0).unwrap(),
@@ -94,7 +99,8 @@ impl SerialServer {
             lineedit: LineEditor::new(),
             read: None,
             notify: None,
-            attr: TerminalAttributes::new()
+            attr: TerminalAttributes::new(),
+            devno
         };
 
         // Attach to the mount point.
@@ -323,4 +329,14 @@ fn procmgr_session_ext(sid: libc::pid_t, xid: i32, id: i32, event: u32) -> Resul
     }
 
     Ok(())
+}
+
+/// Safe wrapper around rsrcdbmgr_devno_attach()
+fn rsrcdbmgr_devno_attach(name: &CStr, minor: i32) -> libc::dev_t {
+    let devno = unsafe { libc_missing::rsrcdbmgr_devno_attach(name.as_ptr(), minor, 0) };
+    if devno == u32::MAX {
+        return 0;
+    }
+
+    devno
 }

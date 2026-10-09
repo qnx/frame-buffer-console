@@ -55,6 +55,9 @@ unsafe extern "C" {
     pub fn procmgr_session_ext(reserved: u32, sid: libc::pid_t, xid: i32, id: i32, event: u32) ->
         i32;
 
+    pub fn rsrcdbmgr_devno_attach(name: *const libc::c_char, minor_request: libc::c_int,
+                                  flags: libc::c_int) -> libc::dev_t;
+
     // The following are in the C library crate, but use the wrong type for receive IDs.
     pub fn MsgReceive_r(chid: i32, msg: *mut libc::c_void, bytes: usize,
                         info: *mut libc::_msg_info64) -> i64;
