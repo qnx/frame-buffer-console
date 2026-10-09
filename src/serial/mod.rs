@@ -105,7 +105,7 @@ impl SerialServer {
 
         // Attach to the mount point.
         let mut mount = Mount::new();
-        let _ = mount.attach(&server.channel, "/dev/uefi", FileType::FILE,
+        let _ = mount.attach(&server.channel, "/dev/confb", FileType::FILE,
                              0).unwrap();
 
         server

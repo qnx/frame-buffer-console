@@ -14,7 +14,7 @@
 
 use crate::libc_missing;
 
-/// Access to the UEFI frame buffer
+/// Access to the hardware frame buffer
 #[derive(Debug)]
 pub struct FrameBuffer {
     /// Virtual address of the mapped hardware frame buffer.
