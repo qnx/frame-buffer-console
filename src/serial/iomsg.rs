@@ -135,26 +135,18 @@ impl IoMsgImpl for SerialServer {
             return Err(libc::EBADF);
         }
 
-        let stat = libc::stat {
-            st_ino: 1,
-            st_size: 0,
-            st_dev: 0,
-            st_rdev: libc::S_IFCHR,
-            st_uid: self.perms.uid,
-            st_gid: self.perms.gid,
-            st_mode: self.perms.get_mode() | libc::S_IFCHR,
-            st_nlink: 0,
-            st_blocksize: 0,
-            st_nblocks: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-            st_mtim: libc::timespec { tv_sec: 0, tv_nsec: 0 },
-            st_atim: libc::timespec { tv_sec: 0, tv_nsec: 0 },
-            st_ctim: libc::timespec { tv_sec: 0, tv_nsec: 0 },
-            __old_st_mtime: 0,
-            __old_st_atime: 0,
-            __old_st_ctime: 0
+        // FIXME:
+        // There is currently no safe way to instantiate a stat structure.
+        let mut stat = unsafe {
+            std::mem::MaybeUninit::<libc::stat>::zeroed().assume_init()
         };
+
+        stat.st_dev = self.devno;
+        stat.st_ino = 1;
+        stat.st_rdev = libc::S_IFCHR;
+        stat.st_uid = self.perms.uid;
+        stat.st_gid = self.perms.gid;
+        stat.st_mode = self.perms.get_mode() | libc::S_IFCHR;
 
         trans.reply_with_payload(0, &stat);
         Ok(())
