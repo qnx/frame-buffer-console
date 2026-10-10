@@ -35,12 +35,19 @@ pub struct Screen {
     attr: u8,
     /// Escape sequence parser.
     pub escape: Escape,
+    /// Whether DEC Special Grpahics character set is in effect.
+    decsg: bool
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
     chr: ' ' as u8,
     attr: DEFAULT_ATTR
 };
+
+const DECSG_TABLE: [u8; 32] = [
+    0x20, 0x4, 0xdb, 0x0, 0x0, 0x0, 0x0, 0xf8, 0xf1, 0xb2, 0xe8, 0xd9, 0xbf, 0xda, 0xc0, 0xc5,
+    0xdf, 0xdf, 0xc4, 0xdc, 0xdc, 0xc3, 0xb4, 0xc1, 0xc2, 0xb3, 0xf3, 0xf2, 0xe3, 0x0, 0x0, 0x7
+];
 
 impl Screen {
     pub fn new(width: u32, height: u32, font: &Font) -> Result<Screen, ()> {
@@ -55,7 +62,8 @@ impl Screen {
             cursor: Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 },
             attr: DEFAULT_ATTR,
             escape: Escape::new(),
-            cr_to_nl: false
+            cr_to_nl: false,
+            decsg: false
         })
     }
 
@@ -206,9 +214,16 @@ impl Screen {
         self.set_dirty(&insert.rect);
     }
 
-    fn insert_char(&mut self, chr: u8, insert: &mut Insert) {
+    fn insert_char(&mut self, mut chr: u8, insert: &mut Insert) {
         // Check for scrolling if inserting into an overflow row.
         self.check_scroll(insert);
+
+        if self.decsg {
+            // Translate special graphics characters.
+            if chr >= 0x5f && chr <= 0x7e {
+                chr = DECSG_TABLE[(chr - 0x5f) as usize];
+            }
+        }
 
         // Update the buffer with the given character.
         self.buffer.set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
@@ -258,6 +273,8 @@ impl Screen {
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
+            EscapeResult::ASCII => self.decsg = false,
+            EscapeResult::DECSG => self.decsg = true,
             _ => {}
         }
 

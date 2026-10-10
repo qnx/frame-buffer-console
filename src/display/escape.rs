@@ -53,7 +53,11 @@ pub enum EscapeResult {
     /// Erase in page.
     ED(u32),
     /// Insert character.
-    ICH(u32)
+    ICH(u32),
+    /// ASCII character set.
+    ASCII,
+    /// DEC Special Graphics character set.
+    DECSG
 }
 
 #[derive(Debug, PartialEq)]
@@ -197,9 +201,15 @@ impl Escape {
                     }
                 }
                 State::CharSet => {
-                    // This driver doesn't support any character sets.
-                    // Just ensure a valid sequence.
-                    if chr >= b'A' && chr <= b'Z' {
+                    // Character sets other than ASCII and DEC special graphics are parsed but
+                    // ignored.
+                    if chr == b'0' {
+                        self.result = EscapeResult::DECSG;
+                        State::Done
+                    } else if chr == b'B' {
+                        self.result = EscapeResult::ASCII;
+                        State::Done
+                    } else if chr >= b'A' && chr <= b'Z' {
                         State::Done
                     } else if chr >= b'0' && chr <= b'9' {
                         State::Done
