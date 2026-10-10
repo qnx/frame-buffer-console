@@ -44,6 +44,8 @@ pub enum EscapeResult {
     CUU(u32),
     /// Cursor position.
     CUP(u32, u32),
+    /// Cursor character absolute.
+    CHA(u32),
     /// Device attributes 2.
     DA2,
     /// Delete character.
@@ -265,10 +267,11 @@ impl Escape {
             b'B' => EscapeResult::CUD(self.param(0, 1)),
             b'C' => EscapeResult::CUF(self.param(0, 1)),
             b'D' => EscapeResult::CUB(self.param(0, 1)),
-            b'P' => EscapeResult::DCH(self.param(0, 1)),
-            b'K' => EscapeResult::EL(self.param(0, 0)),
-            b'J' => EscapeResult::ED(self.param(0, 0)),
+            b'G' => EscapeResult::CHA(self.param(0, 1)),
             b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
+            b'J' => EscapeResult::ED(self.param(0, 0)),
+            b'K' => EscapeResult::EL(self.param(0, 0)),
+            b'P' => EscapeResult::DCH(self.param(0, 1)),
             b'@' => EscapeResult::ICH(self.param(0, 1)),
             b'c' => match self.prefix {
                 Some(b'>') => EscapeResult::DA2,

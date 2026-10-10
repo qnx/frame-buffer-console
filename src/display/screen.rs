@@ -269,6 +269,8 @@ impl Screen {
             EscapeResult::CUB(n) => self.move_cursor(CursorDir::Back(n), insert),
             EscapeResult::CUF(n) => self.move_cursor(CursorDir::Forward(n), insert),
             EscapeResult::CUP(r, c) => self.move_cursor(CursorDir::Position(c, r), insert),
+            EscapeResult::CHA(c) =>
+                self.move_cursor(CursorDir::Position(c, self.cursor.row + 1), insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
