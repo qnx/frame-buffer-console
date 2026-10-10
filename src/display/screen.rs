@@ -140,7 +140,7 @@ impl Screen {
             match chr {
                 b'\n' => self.newline(&mut insert),
                 0x07 => self.bell(),
-                0x08 => self.backspace(&mut insert),
+                0x08 => self.move_cursor(CursorDir::Back(1), &mut insert),
                 0x1b => pos += self.maybe_escape(&mut insert, &chrs[pos + 1..]),
                 b'\r' => {
                     if self.cr_to_nl {
@@ -236,12 +236,6 @@ impl Screen {
         insert.bufidx = (insert.row * self.columns) as usize;
     }
 
-    /// Delete one character back.
-    fn backspace(&mut self, insert: &mut Insert) {
-        self.move_cursor(CursorDir::Back(1), insert);
-        self.delete(1, insert);
-    }
-
     fn bell(&mut self) {
         // Do nothing for now.
     }
@@ -333,7 +327,7 @@ impl Screen {
     }
 
     /// Delete num characters from the current position.
-    fn delete(&mut self, num: u32, insert: &Insert) {
+    fn delete(&mut self, num: u32, insert: &mut Insert) {
         for i in 0..num as usize {
             if (insert.bufidx + i) == self.buffer.size() {
                 break;
