@@ -18,13 +18,26 @@ mod qnxmsg;
 mod serial;
 mod libc_missing;
 
+use std::env;
 use hid::Hid;
 use display::Display;
 use serial::SerialServer;
 
 fn main() {
+    // Parse command-line arguments.
+    let mut double_buffer = false;
+
+    let args = env::args_os().skip(1);
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        match arg.to_str().unwrap_or_default() {
+            "--double-buffer" => double_buffer = true,
+            _ => {}
+        };
+    }
+
     // Create the top-level objects.
-    let mut display = Display::new().unwrap();
+    let mut display = Display::new(double_buffer).unwrap();
     let mut server = SerialServer::new(&display);
     let _hid = Hid::new(&server).unwrap();
 

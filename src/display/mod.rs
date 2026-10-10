@@ -81,9 +81,9 @@ struct Rect {
 }
 
 impl Display {
-    pub fn new() -> Result<Display, ()> {
+    pub fn new(double_buffer: bool) -> Result<Display, ()> {
         // Map the frame buffer.
-        let framebuffer = FrameBuffer::new()?;
+        let framebuffer = FrameBuffer::new(double_buffer)?;
 
         // Choose a font based on the frame buffer's geometry.
         let font = if (framebuffer.height * 2) < framebuffer.width {

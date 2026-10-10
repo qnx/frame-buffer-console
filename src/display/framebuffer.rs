@@ -76,7 +76,7 @@ const FB_CACHE_ATTR: u32 = libc_missing::AARCH64_PTE_SODEV as u32;
 /// Initialize the buffers used for screen display.
 /// The hardware frame buffer is mapped using a shared memory object, while the software buffer is
 /// allocated in regular memory.
-fn map_framebuffer(paddr: u64, len: usize) -> Result<(u64, u64), ()> {
+fn map_framebuffer(paddr: u64, len: usize, double_buffer: bool) -> Result<(u64, u64), ()> {
     // Create the shared memory object.
     let fd = unsafe { libc::shm_open(libc::SHM_ANON, libc::O_RDWR, 0o600) };
     if fd == -1 {
@@ -107,25 +107,31 @@ fn map_framebuffer(paddr: u64, len: usize) -> Result<(u64, u64), ()> {
     }
 
     // Allocate a software buffer.
-    let sw_addr = unsafe {
+    let sw_addr = if double_buffer {
+        let sw_addr = unsafe {
             libc::mmap(std::ptr::null_mut(), len,
                        libc::PROT_READ | libc::PROT_WRITE,
                        libc::MAP_PRIVATE | libc::MAP_ANON, -1, 0)
+        };
+
+        if sw_addr == libc::MAP_FAILED {
+            println!("Failed to map frame buffer");
+            return Err(());
+        }
+
+        sw_addr as u64
+    } else {
+        hw_addr as u64
     };
 
-    if sw_addr == libc::MAP_FAILED {
-        println!("Failed to map frame buffer");
-        return Err(());
-    }
-
-    Ok((hw_addr as u64, sw_addr as u64))
+    Ok((hw_addr as u64, sw_addr))
 }
 
 impl FrameBuffer {
-    pub fn new() -> Result<FrameBuffer, ()> {
+    pub fn new(double_buffer: bool) -> Result<FrameBuffer, ()> {
         let hfb = hwi_framebuffer()?;
         let size = hfb.bufsize as usize;
-        let (hw_addr, sw_addr) = map_framebuffer(hfb.buffer, size)?;
+        let (hw_addr, sw_addr) = map_framebuffer(hfb.buffer, size, double_buffer)?;
 
         Ok(FrameBuffer { hw_addr, sw_addr, size, width: hfb.hres, height: hfb.vres,
                          stride: hfb.stride })
@@ -139,12 +145,15 @@ impl FrameBuffer {
     }
 
     /// Copy the contents of the software buffer to the mapped hardware buffer.
+    /// Only applicable if double-buffering is enabled.
     pub fn update(&self) {
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                self.sw_addr as *const u8,
-                self.hw_addr as *mut u8,
-                self.size as usize)
-        };
+        if self.sw_addr != self.hw_addr {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    self.sw_addr as *const u8,
+                    self.hw_addr as *mut u8,
+                    self.size as usize)
+            };
+        }
     }
 }
