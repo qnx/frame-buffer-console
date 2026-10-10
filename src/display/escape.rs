@@ -65,6 +65,7 @@ enum State {
     CsiFinal,
     String,
     StringTerminator,
+    CharSet,
     Done,
     Error
 }
@@ -118,6 +119,10 @@ impl Escape {
                         b'_' => State::String,   // Application Program Command
                         b'=' => State::Done,     // Application keypad
                         b'>' => State::Done,     // Normal keypad
+                        b'(' => State::CharSet,  // Character set
+                        b')' => State::CharSet,  // Character set
+                        b'*' => State::CharSet,  // Character set
+                        b'+' => State::CharSet,  // Character set
                         _ => State::Error
                     }
                 },
@@ -189,6 +194,19 @@ impl Escape {
                     match chr {
                         b'\\' => State::Done,
                         _ => State::Error
+                    }
+                }
+                State::CharSet => {
+                    // This driver doesn't support any character sets.
+                    // Just ensure a valid sequence.
+                    if chr >= b'A' && chr <= b'Z' {
+                        State::Done
+                    } else if chr >= b'0' && chr <= b'9' {
+                        State::Done
+                    } else if chr == b'=' {
+                        State::Done
+                    } else {
+                        State::Error
                     }
                 }
                 _ => State::Error
