@@ -110,10 +110,11 @@ impl LineEditor {
         // The newline character is always added to the end of the line.
         assert!(self.len < LINE_SIZE);
         self.buffer[self.len] = b'\n';
-        self.len += 1;
 
-        // Update the display by showing the complete line.
-        display.insert_line(&self.buffer[0..self.len], self.row, 0, 0);
+        // Add a newline to the screen.
+        let lf = [b'\n'];
+        display.insert_line(&lf, self.row, self.len as u32, 0);
+        self.len += 1;
 
         // Let the caller know that processing is done for this line.
         Some(Key { chr: KEY_CANON_EOL, modifier: MOD_SPECIAL })

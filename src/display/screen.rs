@@ -180,6 +180,9 @@ impl Screen {
 
             // Stop at a newline.
             if chr == b'\n' {
+                // Add the current position to the dirty rectangle, as it may hold a cursor that
+                // needs to be cleared.
+                insert.update_rect(insert.col, insert.row);
                 self.newline(&mut insert);
                 break;
             }
