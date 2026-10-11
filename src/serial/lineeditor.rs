@@ -19,12 +19,10 @@ use crate::display::Display;
 use crate::hid::key::*;
 use crate::display::cursor::CursorDir;
 
-const LINE_SIZE: usize = 256;
-
 /// Line editing in canonical mode.
 pub struct LineEditor {
     /// Line buffer.
-    buffer: [u8; LINE_SIZE],
+    buffer: Vec<u8>,
     /// Line length (highest inserted index).
     len: usize,
     /// Insertion position.
@@ -34,8 +32,10 @@ pub struct LineEditor {
 }
 
 impl LineEditor {
-    pub fn new() -> Self {
-        LineEditor { buffer: [0; LINE_SIZE], len: 0, pos: 0, row: 0 }
+    pub fn new(columns: u32) -> Self {
+        let mut buffer = Vec::<u8>::with_capacity(columns as usize);
+        buffer.resize(columns as usize, 0);
+        LineEditor { buffer, len: 0, pos: 0, row: 0 }
     }
 
     /// Start editing the given line.
@@ -70,7 +70,7 @@ impl LineEditor {
 
         // Drop the key if the buffer is full.
         // Note that one position is left for a (potential) newline.
-        if self.len == LINE_SIZE - 1 {
+        if self.len == self.buffer.len() - 1 {
             return None;
         }
 
@@ -139,7 +139,7 @@ impl LineEditor {
     /// Newline terminates editing of the current line.
     fn newline(&mut self, display: &mut Display) -> Option<Key> {
         // The newline character is always added to the end of the line.
-        assert!(self.len < LINE_SIZE);
+        assert!(self.len < self.buffer.len());
         self.buffer[self.len] = b'\n';
 
         // Add a newline to the screen.

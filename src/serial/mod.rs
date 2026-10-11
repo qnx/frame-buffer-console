@@ -96,7 +96,7 @@ impl SerialServer {
             perms: FilePerms::new(0, 0, 0o666),
             job: None,
             input_buffer: InputBuffer::new(),
-            lineedit: LineEditor::new(),
+            lineedit: LineEditor::new(display.screen_size().0),
             read: None,
             notify: None,
             attr: TerminalAttributes::new(),
