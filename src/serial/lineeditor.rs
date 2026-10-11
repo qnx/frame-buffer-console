@@ -70,17 +70,16 @@ impl LineEditor {
             return None;
         }
 
-        // Insert the key into the line buffer.
-        if self.pos == self.len {
-            // Append to the end of the line.
-            self.len += 1;
-        } else {
-            // Insert in the middle of the line.
-            for idx in self.len - 1..self.pos {
-                self.buffer[idx] = self.buffer[idx - 1];
+        if self.pos != self.len {
+            // Shift characters if not appending to the end of the line.
+            for idx in (self.pos..self.len).rev() {
+                self.buffer[idx + 1] = self.buffer[idx];
             }
         }
+
+        // Insert the key into the line buffer.
         self.buffer[self.pos] = chr;
+        self.len += 1;
 
         // Update the display.
         display.insert_line(&self.buffer[self.pos..self.len], self.row, self.pos as u32,
