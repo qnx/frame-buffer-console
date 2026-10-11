@@ -99,7 +99,7 @@ impl Escape {
     /// incomplete state given more bytes.
     /// Return true if parsing is complete (either successfully or not), or false if reached the
     /// end of the bytes before an escape sequence terminated.
-    pub fn parse(&mut self, data: &[u8]) -> bool {
+    pub fn parse(&mut self, data: &[u8], attr: u8) -> bool {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
         let mut data_iter = data.into_iter();
@@ -180,7 +180,7 @@ impl Escape {
                     }
                 }
                 State::CsiFinal => {
-                    self.csi(chr);
+                    self.csi(chr, attr);
                     State::Done
                 }
                 State::String => {
@@ -259,10 +259,10 @@ impl Escape {
 
     /// Terminate a command sequence introducer.
     /// The final character determines the resulting command.
-    fn csi(&mut self, final_char: u8) {
+    fn csi(&mut self, final_char: u8, attr: u8) {
         // Process sequence based on the final character.
         self.result = match final_char {
-            b'm' => self.sgr_to_attr(),
+            b'm' => self.sgr_to_attr(attr),
             b'A' => EscapeResult::CUU(self.param(0, 1)),
             b'B' => EscapeResult::CUD(self.param(0, 1)),
             b'C' => EscapeResult::CUF(self.param(0, 1)),
@@ -283,13 +283,15 @@ impl Escape {
 
     /// Convert a CSI graphics command to character attributes.
     /// Currently only handles foreground and background colours.
-    fn sgr_to_attr(&self) -> EscapeResult {
-        let mut attr: u8 = DEFAULT_ATTR;
+    fn sgr_to_attr(&self, mut attr: u8) -> EscapeResult {
         for i in 0..self.params.len() {
             let param = self.params[i];
             if param == 0 {
                 // Reset.
                 attr = DEFAULT_ATTR;
+            } else if param == 1 {
+                // Bold - use the bright version of the foreground colour.
+                attr |= 0x08;
             } else if param == 7 || param == 27 {
                 // Reverse video.
                 attr = (attr >> 4) | (attr & 0xf) << 4;

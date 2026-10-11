@@ -259,7 +259,7 @@ impl Screen {
     /// The function is called when the ESC character is encouneted in a stream.
     fn maybe_escape(&mut self, insert: &mut Insert, data: &[u8]) -> usize {
         // Parse the escape sequence.
-        if !self.escape.parse(data) {
+        if !self.escape.parse(data, self.attr) {
             return self.escape.len;
         }
 
