@@ -265,18 +265,20 @@ impl Screen {
 
         // Act on the result.
         match self.escape.result {
-            EscapeResult::SGR(attr) => self.attr = attr,
+            EscapeResult::ASCII => self.decsg = false,
+            EscapeResult::CHA(c) =>
+                self.move_cursor(CursorDir::Position(c, self.cursor.row + 1), insert),
             EscapeResult::CUB(n) => self.move_cursor(CursorDir::Back(n), insert),
             EscapeResult::CUF(n) => self.move_cursor(CursorDir::Forward(n), insert),
             EscapeResult::CUP(r, c) => self.move_cursor(CursorDir::Position(c, r), insert),
-            EscapeResult::CHA(c) =>
-                self.move_cursor(CursorDir::Position(c, self.cursor.row + 1), insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
+            EscapeResult::DECSG => self.decsg = true,
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
-            EscapeResult::ASCII => self.decsg = false,
-            EscapeResult::DECSG => self.decsg = true,
+            EscapeResult::SGR(attr) => self.attr = attr,
+            EscapeResult::VPA(r) =>
+                self.move_cursor(CursorDir::Position(self.cursor.col + 1, r), insert),
             _ => {}
         }
 

@@ -32,34 +32,36 @@ pub struct Escape {
 pub enum EscapeResult {
     /// Parsing failed.
     None,
-    /// Select Graphic Rendition.
-    SGR(u8),
+    /// ASCII character set.
+    ASCII,
+    /// Cursor character absolute.
+    CHA(u32),
     /// Cursor left.
     CUB(u32),
     /// Cursor down.
     CUD(u32),
     /// Cursor right.
     CUF(u32),
-    /// Cursor up.
-    CUU(u32),
     /// Cursor position.
     CUP(u32, u32),
-    /// Cursor character absolute.
-    CHA(u32),
+    /// Cursor up.
+    CUU(u32),
     /// Device attributes 2.
     DA2,
     /// Delete character.
     DCH(u32),
+    /// DEC Special Graphics character set.
+    DECSG,
     /// Erase in line.
     EL(u32),
     /// Erase in page.
     ED(u32),
     /// Insert character.
     ICH(u32),
-    /// ASCII character set.
-    ASCII,
-    /// DEC Special Graphics character set.
-    DECSG
+    /// Select Graphic Rendition.
+    SGR(u8),
+    /// Line position absolute.
+    VPA(u32)
 }
 
 #[derive(Debug, PartialEq)]
@@ -277,6 +279,7 @@ impl Escape {
                 Some(b'>') => EscapeResult::DA2,
                 _ => EscapeResult::None
             }
+            b'd' => EscapeResult::VPA(self.param(0, 1)),
             _ => EscapeResult::None
         };
     }
