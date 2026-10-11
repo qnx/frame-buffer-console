@@ -143,7 +143,6 @@ impl SerialServer {
             };
         }
 
-        let chr = key.chr;
         if key.is_ctrl() {
             self.handle_ctrl(key);
             return;
@@ -155,6 +154,7 @@ impl SerialServer {
         }
 
         // Print the character in ECHO mode.
+        let chr = key.as_char();
         if self.attr.echo_on() {
             let chrs = [chr];
             self.display.insert_at_cursor(&chrs);
@@ -166,7 +166,7 @@ impl SerialServer {
 
     /// Handle a key combination that includes control.
     fn handle_ctrl(&mut self, key: Key) {
-        match key.chr {
+        match key.as_char() {
             b'a' => {
                 // Ctrl-A, send Start Of Heading (1).
                 let chrs: [u8; 1] = [1];
@@ -186,13 +186,13 @@ impl SerialServer {
                 let chrs: [u8; 1] = [5];
                 self.data_available(Some(&chrs));
             }
-            _ => { println!("Unhandled control {}", key.chr); }
+            _ => { println!("Unhandled control {}", key.as_char()); }
         }
     }
 
     /// Handle a key marked with the special modifier.
     fn handle_special(&mut self, key: Key) {
-        match key.chr {
+        match key.code {
             KEY_LEFT_ARROW => self.data_available(Some(&[0x1b, b'[', b'D'])),
             KEY_RIGHT_ARROW => self.data_available(Some(&[0x1b, b'[', b'C'])),
             KEY_UP_ARROW => self.data_available(Some(&[0x1b, b'[', b'A'])),

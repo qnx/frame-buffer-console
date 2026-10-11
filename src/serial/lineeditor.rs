@@ -56,7 +56,7 @@ impl LineEditor {
             return self.handle_ctrl(key);
         }
 
-        let chr = key.chr;
+        let chr = key.as_char();
         match chr {
             b'\n' => return self.newline(display),
             0x08 => return self.backspace(display),
@@ -91,7 +91,7 @@ impl LineEditor {
     }
 
     fn handle_ctrl(&mut self, key: Key) -> Option<Key> {
-        match key.chr {
+        match key.as_char() {
             b'a' => {
                 // Ctrl-A, go to beginning of line
                 self.pos = 0;
@@ -99,7 +99,7 @@ impl LineEditor {
             }
             b'd' => {
                 // Ctrl-D, end of transimission.
-                Some(Key { chr: KEY_CANON_EOT, modifier: MOD_SPECIAL })
+                Some(Key { code: KEY_CANON_EOT, modifier: MOD_SPECIAL })
             }
             _ => Some(key)
         }
@@ -117,7 +117,7 @@ impl LineEditor {
         self.len += 1;
 
         // Let the caller know that processing is done for this line.
-        Some(Key { chr: KEY_CANON_EOL, modifier: MOD_SPECIAL })
+        Some(Key { code: KEY_CANON_EOL, modifier: MOD_SPECIAL })
     }
 
     /// Backspace erases one character back.

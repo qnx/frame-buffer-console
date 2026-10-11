@@ -54,7 +54,16 @@ impl Keyboard {
             return None;
         }
 
-        if self.pressed_key != key {
+        let is_changed = match self.pressed_key {
+            None => true,
+            Some(k) => {
+                // For the purpose of repeated key events, consider a modified character and an
+                // unmodified character to be the same.
+                k.code != key.unwrap().code
+            }
+        };
+
+        if is_changed {
             // Key changed, always emit an event.
             self.pressed_key = key;
             self.key_time = Instant::now();
