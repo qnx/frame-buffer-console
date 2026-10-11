@@ -17,6 +17,7 @@
 
 use crate::display::Display;
 use crate::hid::key::*;
+use crate::display::cursor::CursorDir;
 
 const LINE_SIZE: usize = 256;
 
@@ -53,7 +54,7 @@ impl LineEditor {
     /// Returns None if the key was fully consumed, or a key to process further by the caller.
     pub fn key_event(&mut self, key: Key, display: &mut Display) -> Option<Key> {
         if key.is_ctrl() {
-            return self.handle_ctrl(key);
+            return self.handle_ctrl(key, display);
         }
 
         let chr = key.as_char();
@@ -90,16 +91,23 @@ impl LineEditor {
         None
     }
 
-    fn handle_ctrl(&mut self, key: Key) -> Option<Key> {
+    fn handle_ctrl(&mut self, key: Key, display: &mut Display) -> Option<Key> {
         match key.as_char() {
             b'a' => {
                 // Ctrl-A, go to beginning of line
                 self.pos = 0;
-                Some(key)
+                display.move_in_line(CursorDir::BOL);
+                None
             }
             b'd' => {
                 // Ctrl-D, end of transimission.
                 Some(Key { code: KEY_CANON_EOT, modifier: MOD_SPECIAL })
+            }
+            b'e' => {
+                // Ctrl-E, go to end of line
+                self.pos = self.len;
+                display.move_in_line(CursorDir::Position((self.len + 1) as u32, self.row + 1));
+                None
             }
             _ => Some(key)
         }

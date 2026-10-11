@@ -15,12 +15,13 @@
 mod framebuffer;
 mod screen;
 mod font;
-mod cursor;
+pub mod cursor;
 mod escape;
 
 use framebuffer::FrameBuffer;
 use screen::Screen;
 use font::Font;
+use cursor::CursorDir;
 
 use std::sync::{Arc, Mutex, Condvar};
 use std::thread;
@@ -124,6 +125,12 @@ impl Display {
     pub fn insert_line(&mut self, chrs: &[u8], row: u32, col: u32, cursor_col: u32) {
         let mut screen = self.obj.screen.lock().unwrap();
         screen.insert_line(chrs, row, col, cursor_col);
+        self.obj.cond.notify_one();
+    }
+
+    pub fn move_in_line(&mut self, dir: CursorDir) {
+        let mut screen = self.obj.screen.lock().unwrap();
+        screen.move_in_line(dir);
         self.obj.cond.notify_one();
     }
 

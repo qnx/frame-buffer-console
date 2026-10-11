@@ -214,6 +214,21 @@ impl Screen {
         self.set_dirty(&insert.rect);
     }
 
+    pub fn move_in_line(&mut self, dir: CursorDir) {
+        // Add characters.
+        let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
+        self.move_cursor(dir, &mut insert);
+
+        // Set new cursor position.
+        self.check_scroll(&mut insert);
+        self.cursor.col = insert.col;
+        self.cursor.row = insert.row;
+        insert.update_rect(insert.col, insert.row);
+
+        // Update the dirty rectangle.
+        self.set_dirty(&insert.rect);
+    }
+
     fn insert_char(&mut self, mut chr: u8, insert: &mut Insert) {
         // Check for scrolling if inserting into an overflow row.
         self.check_scroll(insert);
