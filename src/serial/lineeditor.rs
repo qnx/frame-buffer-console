@@ -57,6 +57,10 @@ impl LineEditor {
             return self.handle_ctrl(key, display);
         }
 
+        if key.is_special() {
+            return self.handle_special(key, display);
+        }
+
         let chr = key.as_char();
         match chr {
             b'\n' => return self.newline(display),
@@ -110,6 +114,26 @@ impl LineEditor {
             }
             _ => Some(key)
         }
+    }
+
+    /// Handle a key marked with the special modifier.
+    fn handle_special(&mut self, key: Key, display: &mut Display) -> Option<Key> {
+        match key.code {
+            KEY_LEFT_ARROW => {
+                if self.pos > 0 {
+                    self.pos -= 1;
+                    display.move_in_line(CursorDir::Back(1));
+                }
+            }
+            KEY_RIGHT_ARROW => {
+                if self.pos < self.len {
+                    self.pos += 1;
+                    display.move_in_line(CursorDir::Forward(1));
+                }
+            }
+            _ => {}
+        }
+        None
     }
 
     /// Newline terminates editing of the current line.
