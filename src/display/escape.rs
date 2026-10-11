@@ -50,6 +50,10 @@ pub enum EscapeResult {
     DA2,
     /// Delete character.
     DCH(u32),
+    /// Application keypad.
+    DECPAM,
+    /// Normal keypad.
+    DECPNM,
     /// DEC Special Graphics character set.
     DECSG,
     /// Erase in line.
@@ -125,8 +129,14 @@ impl Escape {
                         b']' => State::String,   // Operating System Command
                         b'^' => State::String,   // Privacy Message
                         b'_' => State::String,   // Application Program Command
-                        b'=' => State::Done,     // Application keypad
-                        b'>' => State::Done,     // Normal keypad
+                        b'=' => {
+                            self.result = EscapeResult::DECPAM;
+                            State::Done
+                        },                       // Application keypad
+                        b'>' => {
+                            self.result = EscapeResult::DECPNM;
+                            State::Done
+                        },                       // Normal keypad
                         b'(' => State::CharSet,  // Character set
                         b')' => State::CharSet,  // Character set
                         b'*' => State::CharSet,  // Character set
