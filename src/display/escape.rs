@@ -66,6 +66,10 @@ pub enum EscapeResult {
     ED(u32),
     /// Insert character.
     ICH(u32),
+    /// Insert mode.
+    IRMI,
+    /// Replace mode.
+    IRMR,
     /// Select Graphic Rendition.
     SGR(u8),
     /// Line position absolute.
@@ -297,12 +301,18 @@ impl Escape {
             b'h' => if self.prefix == Some(b'?') {
                 EscapeResult::DECCKMA
             } else {
-                EscapeResult::None
+                match self.param(0, 0) {
+                    4 => EscapeResult::IRMI,
+                    _ => EscapeResult::None
+                }
             }
             b'l' => if self.prefix == Some(b'?') {
                 EscapeResult::DECCKMN
             } else {
-                EscapeResult::None
+                match self.param(0, 0) {
+                    4 => EscapeResult::IRMR,
+                    _ => EscapeResult::None
+                }
             }
             _ => EscapeResult::None
         };
