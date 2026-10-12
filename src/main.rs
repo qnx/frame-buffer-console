@@ -45,7 +45,7 @@ fn main() {
     let release = confstr(libc_missing::_CS_RELEASE);
     let host = confstr(libc_missing::_CS_HOSTNAME);
     let machine = confstr(libc_missing::_CS_MACHINE);
-    let msg = format!("\x1b[1;31mWelcome to QNX {release} on {host} {machine}\n");
+    let msg = format!("\x1b[1;31mWelcome to QNX {release} on {host} {machine}\n\x1b[0m");
     display.insert_at_cursor(msg.as_bytes());
 
     // Run the server's message loop.
