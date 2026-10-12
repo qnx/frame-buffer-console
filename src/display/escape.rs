@@ -50,6 +50,10 @@ pub enum EscapeResult {
     DA2,
     /// Delete character.
     DCH(u32),
+    /// Application cursor keys.
+    DECCKMA,
+    /// Normal cursor keys.
+    DECCKMN,
     /// Application keypad.
     DECPAM,
     /// Normal keypad.
@@ -290,6 +294,16 @@ impl Escape {
                 _ => EscapeResult::None
             }
             b'd' => EscapeResult::VPA(self.param(0, 1)),
+            b'h' => if self.prefix == Some(b'?') {
+                EscapeResult::DECCKMA
+            } else {
+                EscapeResult::None
+            }
+            b'l' => if self.prefix == Some(b'?') {
+                EscapeResult::DECCKMN
+            } else {
+                EscapeResult::None
+            }
             _ => EscapeResult::None
         };
     }

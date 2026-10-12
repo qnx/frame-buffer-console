@@ -16,6 +16,7 @@ use crate::display::*;
 use crate::display::font::Font;
 use crate::display::escape::*;
 use crate::display::cursor::*;
+use crate::serial::SerialServer;
 
 /// The logical contents of the screen
 pub struct Screen {
@@ -287,6 +288,8 @@ impl Screen {
             EscapeResult::CUF(n) => self.move_cursor(CursorDir::Forward(n), insert),
             EscapeResult::CUP(r, c) => self.move_cursor(CursorDir::Position(c, r), insert),
             EscapeResult::DCH(n) => self.delete(n, insert),
+            EscapeResult::DECCKMA => SerialServer::set_cursor_key_escape_char(b'O'),
+            EscapeResult::DECCKMN => SerialServer::set_cursor_key_escape_char(b'['),
             EscapeResult::DECSG => self.decsg = true,
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),

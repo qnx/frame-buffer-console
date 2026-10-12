@@ -19,6 +19,7 @@ mod termios;
 mod lineeditor;
 
 use std::ffi::CStr;
+use std::sync::atomic::{AtomicU8, Ordering};
 use crate::libc_missing;
 use crate::qnxmsg::*;
 use crate::qnxmsg::channel::Channel;
@@ -83,6 +84,8 @@ struct NotifyClient {
     coid: i32,
     event: libc::sigevent
 }
+
+pub static CURSOR_KEY_ESC: AtomicU8 = AtomicU8::new(b'[');
 
 impl SerialServer {
     pub fn new(display: &Display) -> Self {
@@ -192,11 +195,12 @@ impl SerialServer {
 
     /// Handle a key marked with the special modifier.
     fn handle_special(&mut self, key: Key) {
+        let cursor_key_esc = CURSOR_KEY_ESC.load(Ordering::Relaxed);
         match key.code {
-            KEY_LEFT_ARROW => self.data_available(Some(&[0x1b, b'[', b'D'])),
-            KEY_RIGHT_ARROW => self.data_available(Some(&[0x1b, b'[', b'C'])),
-            KEY_UP_ARROW => self.data_available(Some(&[0x1b, b'[', b'A'])),
-            KEY_DOWN_ARROW => self.data_available(Some(&[0x1b, b'[', b'B'])),
+            KEY_LEFT_ARROW => self.data_available(Some(&[0x1b, cursor_key_esc, b'D'])),
+            KEY_RIGHT_ARROW => self.data_available(Some(&[0x1b, cursor_key_esc, b'C'])),
+            KEY_UP_ARROW => self.data_available(Some(&[0x1b, cursor_key_esc, b'A'])),
+            KEY_DOWN_ARROW => self.data_available(Some(&[0x1b, cursor_key_esc, b'B'])),
             KEY_CANON_EOL => self.canon_eol(),
             KEY_CANON_EOT => self.canon_eot(),
             _ => {}
@@ -302,6 +306,12 @@ impl SerialServer {
                 Err(err)
             }
         }
+    }
+
+    /// Set the byte to use when emitting a cursor key escape sequence.
+    /// This byte is '[' for normal DEC mode and 'O' for application mode.
+    pub fn set_cursor_key_escape_char(chr: u8) {
+        CURSOR_KEY_ESC.store(chr, Ordering::Relaxed);
     }
 }
 
