@@ -132,8 +132,9 @@ impl Escape {
             self.state = match self.state {
                 State::Init => {
                     match chr {
-                        b'[' => State::CsiParam, // CSI
+                        b'M' => State::Done,     // Reverse index
                         b'P' => State::String,   // Device Control String
+                        b'[' => State::CsiParam, // CSI
                         b']' => State::String,   // Operating System Command
                         b'^' => State::String,   // Privacy Message
                         b'_' => State::String,   // Application Program Command
