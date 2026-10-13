@@ -33,8 +33,10 @@ pub struct Display {
 
 /// Internal display object.
 struct DisplayObj {
-    /// Mapped hardware frame buffer.
-    framebuffer: FrameBuffer,
+    /// Display width, in pixels.
+    width: u32,
+    /// Display height, in pixels.
+    height: u32,
     /// Console text contents.
     screen: Mutex<Screen>,
     /// Display update signalling object.
@@ -99,7 +101,8 @@ impl Display {
 
         let display = Display {
             obj: Arc::<DisplayObj>::new(DisplayObj {
-                framebuffer,
+                width: framebuffer.width,
+                height: framebuffer.height,
                 screen,
                 cond: Condvar::new(),
                 font
@@ -108,7 +111,7 @@ impl Display {
 
         // Start the screen update thread.
         let cloned_display = display.obj.clone();
-        thread::spawn(move || { screen_update_thread(cloned_display); });
+        thread::spawn(move || { screen_update_thread(cloned_display, framebuffer); });
         Ok(display)
     }
 
@@ -146,7 +149,7 @@ impl Display {
     }
 
     pub fn framebuffer_size(&self) -> (u32, u32) {
-        (self.obj.framebuffer.width, self.obj.framebuffer.height)
+        (self.obj.width, self.obj.height)
     }
 
     pub fn set_cr_to_nl(&self, cr_to_nl: bool) {
@@ -156,7 +159,7 @@ impl Display {
 }
 
 /// Thread for drawing the contents of the screen whenever these are updated.
-fn screen_update_thread(display: Arc<DisplayObj>) {
+fn screen_update_thread(display: Arc<DisplayObj>, framebuffer: FrameBuffer) {
     loop {
         // Throttle drawing to ~30FPS (must not be holding the screen's lock).
         // This provides smoother drawing with successive screen updates.
@@ -167,7 +170,7 @@ fn screen_update_thread(display: Arc<DisplayObj>) {
             // Check if an update is required.
             if let Some(rect) = screen.get_rect() {
                 // Yes, redraw.
-                draw_screen(&display, &screen, &rect);
+                draw_screen(&display, &screen, &framebuffer, &rect);
                 break;
             }
 
@@ -178,22 +181,20 @@ fn screen_update_thread(display: Arc<DisplayObj>) {
 }
 
 /// Draw a portion of the screen as defined by the given rectangle.
-fn draw_screen(display: &DisplayObj, screen: &Screen, rect: &Rect) {
+fn draw_screen(display: &DisplayObj, screen: &Screen, framebuffer: &FrameBuffer, rect: &Rect) {
     for row in rect.top..=rect.bottom {
         for col in rect.left..=rect.right {
-            draw_glyph(&display, screen, col, row);
+            draw_glyph(&display, screen, framebuffer, col, row);
         }
     }
 
-    display.framebuffer.update();
+    framebuffer.update();
 }
 
 /// Draw the glyph of a given character into the frame buffer at the specified column and row.
-fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
-    const BYTES_PER_PIXEL: u64 = size_of::<u32>() as u64;
-
+fn draw_glyph(display: &DisplayObj, screen: &Screen, framebuffer: &FrameBuffer, col: u32,
+              row: u32) {
     let font = display.font;
-    let framebuffer = &display.framebuffer;
     let chr = screen.char_at(col, row);
 
     // Don't render past right side of the frame.
@@ -217,7 +218,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
     // Draw the glyph itself.
     let mut bitidx = chr.chr as u32 * font.wbits as u32 * font.hbits as u32;
     for i in 0..font.hbits {
-        let mut xoff = start_x * BYTES_PER_PIXEL;
+        let mut xoff = start_x;
 
         if is_cursor {
             // Drawing glyph in the cursor position.
@@ -240,7 +241,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
             };
 
             framebuffer.set_pixel(pixel + xoff, pixel_colour);
-            xoff += BYTES_PER_PIXEL;
+            xoff += 1;
             bitidx += 1;
         }
 
@@ -258,7 +259,7 @@ fn draw_glyph(display: &DisplayObj, screen: &Screen, col: u32, row: u32) {
             };
 
             framebuffer.set_pixel(pixel + xoff, pixel_colour);
-            xoff += BYTES_PER_PIXEL;
+            xoff += 1;
         }
 
         pixel += stride as u64;
