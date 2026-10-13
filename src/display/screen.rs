@@ -39,7 +39,11 @@ pub struct Screen {
     /// Escape sequence parser.
     pub escape: Escape,
     /// Whether DEC Special Grpahics character set is in effect.
-    decsg: bool
+    decsg: bool,
+    /// Top line of the scrolling region.
+    top_scroll: u32,
+    /// Bottom line of the scrolling region.
+    bottom_scroll: u32,
 }
 
 const BLANK_CHAR: ScreenChar = ScreenChar {
@@ -65,7 +69,9 @@ impl Screen {
             attr: DEFAULT_ATTR,
             escape: Escape::new(),
             cr_to_nl: false,
-            decsg: false
+            decsg: false,
+            top_scroll: 0,
+            bottom_scroll: rows
         })
     }
 
@@ -278,6 +284,7 @@ impl Screen {
             EscapeResult::DECCKMA => SerialServer::set_cursor_key_escape_char(b'O'),
             EscapeResult::DECCKMN => SerialServer::set_cursor_key_escape_char(b'['),
             EscapeResult::DECSG => self.decsg = true,
+            EscapeResult::DECSTBM(t, b) => self.set_scroll_region(t, b),
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
@@ -435,15 +442,19 @@ impl Screen {
     /// be updated directly.
     fn update_cursor(&mut self, col: u32, row: u32, insert: &mut Insert) {
         // Determine if scrolling is needed.
-        if row >= self.rows {
+        if row >= self.bottom_scroll && self.cursor.row < self.bottom_scroll {
             // Rotate the buffer.
-            self.buffers[self.curbuf].scroll();
+            self.buffers[self.curbuf].scroll(self.top_scroll, self.bottom_scroll);
 
             // Now inserting into the new bottom row.
-            self.cursor.row = self.rows - 1;
+            self.cursor.row = self.bottom_scroll - 1;
 
             // The entire screen needs to be updated.
             self.dirty = Some(self.full_rect());
+        } else if row >= self.rows {
+            // Shouldn't happen, but if a new line is opened beneath the last row, and the scroll
+            // window is smaller than the entire buffer, overwrite the last row.
+            self.cursor.row = self.rows - 1;
         } else {
             self.cursor.row = row;
         }
@@ -459,12 +470,47 @@ impl Screen {
 
     /// Select between the primary and alternative buffers.
     fn altbuf(&mut self, on: bool) {
+        // Choose the right buffer.
         self.curbuf = match on {
             true => 1,
             false => 0
         };
 
+        // Redraw the entire screen.
         self.set_dirty(&self.full_rect());
+
+        // Reset the scroll area.
+        // FIXME:
+        // It's not clear how the scroll area is supposed to be restored, so doing it here just
+        // ensure that exiting a program like Vim does not leave a restricted scroll window behind.
+        self.top_scroll = 0;
+        self.bottom_scroll = self.rows;
+    }
+
+    /// Set a new scroll region.
+    /// Row values are 1-based.
+    fn set_scroll_region(&mut self, top: u32, bottom: u32) {
+        println!("set_scroll_region {top} {bottom}");
+
+        self.bottom_scroll = {
+            if bottom > self.rows {
+                self.rows
+            } else if bottom > 0 {
+                bottom - 1
+            } else {
+                self.rows
+            }
+        };
+
+        self.top_scroll = {
+            if top > self.bottom_scroll {
+                0
+            } else if top > 0 {
+                top - 1
+            } else {
+                0
+            }
+        };
     }
 }
 
@@ -474,8 +520,6 @@ struct ScreenBuffer {
     data: Vec<ScreenChar>,
     /// Number of characters in a line
     stride: usize,
-    /// Index of the top-left position in the buffer
-    head: usize
 }
 
 impl ScreenBuffer {
@@ -487,20 +531,17 @@ impl ScreenBuffer {
 
         ScreenBuffer {
             data,
-            head: 0,
             stride: columns as usize
         }
     }
 
     /// Retreive the character at the given index.
     pub fn get_char(&self, index: usize) -> ScreenChar {
-        let index = (self.head + index) % self.data.len();
         self.data[index]
     }
 
     /// Update the character at the given index.
     pub fn set_char(&mut self, index: usize, chr: ScreenChar) {
-        let index = (self.head + index) % self.data.len();
         self.data[index] = chr;
     }
 
@@ -508,12 +549,18 @@ impl ScreenBuffer {
         self.data.len()
     }
 
-    /// Scroll one line by adjusting the head position and clearing the line that is now at the
-    /// bottom of the screen.
-    pub fn scroll(&mut self) {
-        self.head = (self.head + self.stride) % self.data.len();
+    /// Scroll part of the screen, between the given top and bottom rows.
+    pub fn scroll(&mut self, top_row: u32, bottom_row: u32) {
+        // Move the contents of [top_row + 1,bottom_row) into [top_row, bottom_row - 1).
+        let dst_idx = top_row as usize * self.stride;
+        let src_idx = dst_idx + self.stride;
+        let len = (bottom_row - top_row - 1) as usize * self.stride;
+        unsafe { std::ptr::copy(&self.data[src_idx], &mut self.data[dst_idx], len) };
+
+        // Clear the bottom row.
+        let bottom_idx = (bottom_row - 1) as usize * self.stride;
         for i in 0..self.stride {
-            self.data[self.head + i] = BLANK_CHAR;
+            self.data[bottom_idx + i] = BLANK_CHAR;
         }
     }
 }

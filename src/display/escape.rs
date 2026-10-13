@@ -66,6 +66,8 @@ pub enum EscapeResult {
     DECTCEMH,
     /// Show cursor.
     DECTCEMS,
+    /// Scrolling region.
+    DECSTBM(u32, u32),
     /// Erase in line.
     EL(u32),
     /// Erase in page.
@@ -321,6 +323,7 @@ impl Escape {
                     _ => EscapeResult::None
                 }
             }
+            b'r' => EscapeResult::DECSTBM(self.param(0, 1), self.param(1, 1)),
             _ => EscapeResult::None
         };
     }
