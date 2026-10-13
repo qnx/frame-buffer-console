@@ -162,10 +162,7 @@ impl Screen {
         }
 
         // Set new cursor position.
-        self.check_scroll(&mut insert);
-        self.cursor.col = insert.col;
-        self.cursor.row = insert.row;
-        insert.update_rect(insert.col, insert.row);
+        insert.update_rect(self.cursor.col, self.cursor.row);
 
         // Update the dirty rectangle.
         self.set_dirty(&insert.rect);
@@ -188,25 +185,23 @@ impl Screen {
             if chr == b'\n' {
                 // Add the current position to the dirty rectangle, as it may hold a cursor that
                 // needs to be cleared.
-                insert.update_rect(insert.col, insert.row);
+                insert.update_rect(self.cursor.col, self.cursor.row);
                 self.newline(&mut insert);
                 break;
             }
 
             // The line may exceed the width of the screen. Drop extra characters, but keep
             // processing to detect a newline.
-            if insert.col < self.columns {
+            if self.cursor.col < self.columns {
                 self.buffer.set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
                 insert.bufidx += 1;
-                insert.col += 1;
+                self.cursor.col += 1;
             }
         }
 
         // Set new cursor position.
-        self.check_scroll(&mut insert);
+        insert.update_rect(self.cursor.col, self.cursor.row);
         self.cursor.col = cursor_col;
-        self.cursor.row = insert.row;
-        insert.update_rect(insert.col, insert.row);
 
         // Update the dirty rectangle.
         self.set_dirty(&insert.rect);
@@ -218,19 +213,13 @@ impl Screen {
         self.move_cursor(dir, &mut insert);
 
         // Set new cursor position.
-        self.check_scroll(&mut insert);
-        self.cursor.col = insert.col;
-        self.cursor.row = insert.row;
-        insert.update_rect(insert.col, insert.row);
+        insert.update_rect(self.cursor.col, self.cursor.row);
 
         // Update the dirty rectangle.
         self.set_dirty(&insert.rect);
     }
 
     fn insert_char(&mut self, mut chr: u8, insert: &mut Insert) {
-        // Check for scrolling if inserting into an overflow row.
-        self.check_scroll(insert);
-
         if self.decsg {
             // Translate special graphics characters.
             if chr >= 0x5f && chr <= 0x7e {
@@ -243,25 +232,20 @@ impl Screen {
         insert.bufidx += 1;
 
         // Update bounding rectangle of this insertion.
-        insert.update_rect(insert.col, insert.row);
+        insert.update_rect(self.cursor.col, self.cursor.row);
 
         // Move the position one to the right, wrapping as necessary.
-        insert.col += 1;
-        if insert.col == self.columns {
-            insert.col = 0;
-            insert.row += 1;
+        if self.cursor.col == self.columns - 1 {
+            self.update_cursor(0, self.cursor.row + 1, insert);
+        } else {
+            self.cursor.col += 1;
         }
+
     }
 
     /// Move the cursor to the beginning of the next line.
     fn newline(&mut self, insert: &mut Insert) {
-        // Check for scrolling if inserting into an overflow row.
-        self.check_scroll(insert);
-
-        // Move to the next line.
-        insert.col = 0;
-        insert.row += 1;
-        insert.bufidx = (insert.row * self.columns) as usize;
+        self.update_cursor(0, self.cursor.row + 1, insert);
     }
 
     fn bell(&mut self) {
@@ -303,10 +287,10 @@ impl Screen {
     }
 
     /// Update the insertion position based on the given direction.
-    fn move_cursor(&self, dir: CursorDir, insert: &mut Insert) {
+    fn move_cursor(&mut self, dir: CursorDir, insert: &mut Insert) {
         // FIXME:
         // Handle the num argument.
-        let (mut col, mut row) = (insert.col, insert.row);
+        let (mut col, mut row) = (self.cursor.col, self.cursor.row);
         match dir {
             CursorDir::Forward(n) => {
                 // FIXME:
@@ -357,9 +341,10 @@ impl Screen {
             }
         };
 
-        insert.col = col;
-        insert.row = row;
-        insert.bufidx = ((row * self.columns) + col) as usize;
+        // Do not call update_cursor(): these movements should not cause scrolling.
+        self.cursor.col = col;
+        self.cursor.row = row;
+        insert.bufidx = (self.cursor.row * self.columns + self.cursor.col) as usize;
     }
 
     /// Delete num characters from the current position.
@@ -379,12 +364,10 @@ impl Screen {
     /// 1 - from beginning of line to cursor position (inclusive)
     /// 2 - all
     fn erase_line(&mut self, how: u32, insert: &mut Insert) {
-        self.check_scroll(insert);
-
         let (first_idx, count) = match how {
-            0 => (insert.bufidx, self.columns - insert.col),
-            1 => (insert.bufidx - insert.col as usize, insert.col + 1),
-            2 => (insert.bufidx - insert.col as usize, self.columns),
+            0 => (insert.bufidx, self.columns - self.cursor.col),
+            1 => (insert.bufidx - self.cursor.col as usize, self.cursor.col + 1),
+            2 => (insert.bufidx - self.cursor.col as usize, self.columns),
             _ => { return; }
         };
 
@@ -393,8 +376,8 @@ impl Screen {
         }
 
         // Assume the entire line needs to be updated.
-        insert.update_rect(0, insert.row);
-        insert.update_rect(self.columns - 1, insert.row);
+        insert.update_rect(0, self.cursor.row);
+        insert.update_rect(self.columns - 1, self.cursor.row);
     }
 
     /// Delete characters in the display, according to the semantics of the Erase Page (ED) control
@@ -403,8 +386,6 @@ impl Screen {
     /// 1 - from beginning of display to cursor position (inclusive)
     /// 2 - all
     fn erase_page(&mut self, how: u32, insert: &mut Insert) {
-        self.check_scroll(insert);
-
         let (first_idx, last_idx) = match how {
             0 => (insert.bufidx, self.buffer.size() - 1),
             1 => (0, insert.bufidx),
@@ -422,7 +403,7 @@ impl Screen {
 
     /// Shift characters in a line to the right when inserting a character.
     fn shift(&mut self, num: u32, insert: &mut Insert) {
-        let (col, row) = (insert.col, insert.row);
+        let (col, row) = (self.cursor.col, self.cursor.row);
         let num = if num > self.columns - col {
             self.columns - col
         } else {
@@ -442,21 +423,27 @@ impl Screen {
         insert.update_rect(self.columns - 1, row);
     }
 
-    fn check_scroll(&mut self, insert: &mut Insert) {
-        // Check if scolling is needed.
-        if insert.row < self.rows {
-            return;
+    /// Set new columns and row values for the cursor.
+    /// The function should be called whenever the cursor's row may change, in order to detect and
+    /// apply scrolling. If it is known that the row doesn't change, then the cursor's column can
+    /// be updated directly.
+    fn update_cursor(&mut self, col: u32, row: u32, insert: &mut Insert) {
+        // Determine if scrolling is needed.
+        if row >= self.rows {
+            // Rotate the buffer.
+            self.buffer.scroll();
+
+            // Now inserting into the new bottom row.
+            self.cursor.row = self.rows - 1;
+
+            // The entire screen needs to be updated.
+            self.dirty = Some(self.full_rect());
+        } else {
+            self.cursor.row = row;
         }
 
-        // Rotate the buffer.
-        self.buffer.scroll();
-
-        // Now inserting into the new bottom row.
-        insert.row -= 1;
-        insert.bufidx = (insert.row * self.columns) as usize;
-
-        // The entire screen needs to be updated.
-        self.dirty = Some(self.full_rect());
+        self.cursor.col = col;
+        insert.bufidx = (self.cursor.row * self.columns + self.cursor.col) as usize;
     }
 
     /// Return a rectangle encompassing the entire screen
@@ -517,10 +504,6 @@ impl ScreenBuffer {
 
 /// Tracks single- and multi-characters insertions into the screen's buffer.
 struct Insert {
-    /// Column for the next character.
-    col: u32,
-    /// Row for the next character.
-    row: u32,
     /// Position in the screen buffer.
     bufidx: usize,
     /// Area of the screen affected by the update.
@@ -530,8 +513,6 @@ struct Insert {
 impl Insert {
     pub fn new(screen: &Screen, col: u32, row: u32) -> Self {
         Insert {
-            col,
-            row,
             bufidx: (row * screen.columns + col) as usize,
             rect: Rect { left: col, right: col, top: row, bottom: row }
         }
