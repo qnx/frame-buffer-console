@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::display::*;
-use crate::display::font::Font;
 use crate::display::escape::*;
 use crate::display::cursor::*;
 use crate::serial::SerialServer;
@@ -51,14 +50,14 @@ const DECSG_TABLE: [u8; 32] = [
 ];
 
 impl Screen {
-    pub fn new(columns: u32, rows: u32, font: &Font) -> Result<Screen, ()> {
+    pub fn new(columns: u32, rows: u32, cursor: Cursor) -> Result<Screen, ()> {
         println!("Screen size {columns}x{rows}");
         Ok(Screen {
             buffer: ScreenBuffer::new(columns, rows),
             columns,
             rows,
             dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
-            cursor: Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 },
+            cursor,
             attr: DEFAULT_ATTR,
             escape: Escape::new(),
             cr_to_nl: false,

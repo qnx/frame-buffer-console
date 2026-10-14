@@ -21,7 +21,7 @@ mod escape;
 use framebuffer::FrameBuffer;
 use screen::Screen;
 use font::Font;
-use cursor::CursorDir;
+use cursor::{Cursor, CursorDir};
 
 use std::sync::{Arc, Mutex, Condvar};
 use std::thread;
@@ -106,7 +106,8 @@ impl Display {
         }
 
         // Construct the screen object.
-        let screen = Screen::new(columns, rows, font)?;
+        let cursor = Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 };
+        let screen = Screen::new(columns, rows, cursor)?;
         let screen = Mutex::<Screen>::new(screen);
 
         let display = Display {
