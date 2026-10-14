@@ -19,6 +19,7 @@ mod serial;
 mod libc_missing;
 
 use std::env;
+use std::ffi::OsString;
 use hid::Hid;
 use display::Display;
 use serial::SerialServer;
@@ -26,18 +27,27 @@ use serial::SerialServer;
 fn main() {
     // Parse command-line arguments.
     let mut double_buffer = false;
+    let mut screen_size: Option<(u32, u32)> = None;
 
     let args = env::args_os().skip(1);
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.to_str().unwrap_or_default() {
             "--double-buffer" => double_buffer = true,
+            "--screen-size" => if let Some(screen_size_str) = args.next() {
+                screen_size = parse_string_size(screen_size_str);
+                if screen_size.is_none() {
+                    println!("Invalid value for screen-size");
+                }
+            } else {
+                println!("Invalid value for screen-size");
+            }
             _ => {}
         };
     }
 
     // Create the top-level objects.
-    let mut display = Display::new(double_buffer).unwrap();
+    let mut display = Display::new(double_buffer, screen_size).unwrap();
     let mut server = SerialServer::new(&display);
     let _hid = Hid::new(&server).unwrap();
 
@@ -50,6 +60,32 @@ fn main() {
 
     // Run the server's message loop.
     server.message_loop();
+}
+
+fn parse_string_size(screen_size_str: OsString) -> Option<(u32, u32)> {
+    let str = match screen_size_str.into_string() {
+        Ok(str) => str,
+        Err(_) => return None
+    };
+
+    let mut iter = str.split('x');
+    let columns = match iter.next() {
+        Some(str) => match str.parse::<u32>() {
+            Ok(c) => c,
+            Err(_) => return None
+        }
+        None => return None
+    };
+
+    let rows = match iter.next() {
+        Some(str) => match str.parse::<u32>() {
+            Ok(c) => c,
+            Err(_) => return None
+        }
+        None => return None
+    };
+
+    Some((columns, rows))
 }
 
 /// Safe wrapper for the C library's confstr() function.

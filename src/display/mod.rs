@@ -84,7 +84,7 @@ struct Rect {
 }
 
 impl Display {
-    pub fn new(double_buffer: bool) -> Result<Display, ()> {
+    pub fn new(double_buffer: bool, screen_size: Option<(u32, u32)>) -> Result<Display, ()> {
         // Map the frame buffer.
         let framebuffer = FrameBuffer::new(double_buffer)?;
 
@@ -95,8 +95,18 @@ impl Display {
             &font::FONT_9X16
         };
 
+        // Calculate the number of columns and rows.
+        let mut columns = framebuffer.width / font.width as u32;
+        let mut rows = framebuffer.height / font.height as u32;
+
+        // Allow the user to override the screen size.
+        if let Some(screen_size) = screen_size {
+            columns = std::cmp::min(columns, screen_size.0);
+            rows = std::cmp::min(rows, screen_size.1);
+        }
+
         // Construct the screen object.
-        let screen = Screen::new(framebuffer.width, framebuffer.height, font)?;
+        let screen = Screen::new(columns, rows, font)?;
         let screen = Mutex::<Screen>::new(screen);
 
         let display = Display {

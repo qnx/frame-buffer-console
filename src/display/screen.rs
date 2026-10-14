@@ -51,10 +51,8 @@ const DECSG_TABLE: [u8; 32] = [
 ];
 
 impl Screen {
-    pub fn new(width: u32, height: u32, font: &Font) -> Result<Screen, ()> {
-        // Calculate the number of columns and rows.
-        let columns = width / font.width as u32;
-        let rows = height / font.height as u32;
+    pub fn new(columns: u32, rows: u32, font: &Font) -> Result<Screen, ()> {
+        println!("Screen size {columns}x{rows}");
         Ok(Screen {
             buffer: ScreenBuffer::new(columns, rows),
             columns,
