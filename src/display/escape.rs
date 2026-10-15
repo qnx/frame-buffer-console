@@ -60,6 +60,10 @@ pub enum EscapeResult {
     DECPNM,
     /// DEC Special Graphics character set.
     DECSG,
+    /// Hide cursor.
+    DECTCEMH,
+    /// Show cursor.
+    DECTCEMS,
     /// Erase in line.
     EL(u32),
     /// Erase in page.
@@ -300,7 +304,7 @@ impl Escape {
             }
             b'd' => EscapeResult::VPA(self.param(0, 1)),
             b'h' => if self.prefix == Some(b'?') {
-                EscapeResult::DECCKMA
+                self.decset()
             } else {
                 match self.param(0, 0) {
                     4 => EscapeResult::IRMI,
@@ -308,7 +312,7 @@ impl Escape {
                 }
             }
             b'l' => if self.prefix == Some(b'?') {
-                EscapeResult::DECCKMN
+                self.decrst()
             } else {
                 match self.param(0, 0) {
                     4 => EscapeResult::IRMR,
@@ -351,7 +355,25 @@ impl Escape {
         EscapeResult::SGR(attr)
     }
 
-    fn param(&mut self, which: usize, default: u32) -> u32 {
+    /// DEC private mode set (CSI ? <value> h).
+    fn decset(&self) -> EscapeResult {
+        match self.param(0, 0) {
+            1 => EscapeResult::DECCKMA,
+            25 => EscapeResult::DECTCEMS,
+            _ => EscapeResult::None
+        }
+    }
+
+    /// DEC private mode reset (CSI ? <value> l).
+    fn decrst(&self) -> EscapeResult {
+        match self.param(0, 0) {
+            1 => EscapeResult::DECCKMN,
+            25 => EscapeResult::DECTCEMH,
+            _ => EscapeResult::None
+        }
+    }
+
+    fn param(&self, which: usize, default: u32) -> u32 {
         if self.params.len() > which {
             self.params[which]
         } else {
