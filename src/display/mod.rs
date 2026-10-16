@@ -106,7 +106,7 @@ impl Display {
         }
 
         // Construct the screen object.
-        let cursor = Cursor { col: 0, row: 0, top: font.height - 1, bottom: font.height - 1 };
+        let cursor = Cursor { col: 0, row: 0, top: 0, bottom: font.height - 1 };
         let screen = Screen::new(columns, rows, cursor)?;
         let screen = Mutex::<Screen>::new(screen);
 
