@@ -279,6 +279,7 @@ impl Screen {
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
+            EscapeResult::RI => self.reverse_index(insert),
             EscapeResult::SGR(attr) => self.attr = attr,
             EscapeResult::VPA(r) =>
                 self.move_cursor(CursorDir::Position(self.cursor.col + 1, r), insert),
@@ -435,7 +436,7 @@ impl Screen {
         // Determine if scrolling is needed.
         if row >= self.bottom_scroll && self.cursor.row < self.bottom_scroll {
             // Rotate the buffer.
-            self.buffers[self.curbuf].scroll(self.top_scroll, self.bottom_scroll);
+            self.buffers[self.curbuf].scroll_up(self.top_scroll, self.bottom_scroll);
 
             // Now inserting into the new bottom row.
             self.cursor.row = self.bottom_scroll - 1;
@@ -503,6 +504,16 @@ impl Screen {
             }
         };
     }
+
+    /// Move the cursor one line up, scrolling if the cursor is already at the top margin.
+    fn reverse_index(&mut self, insert: &mut Insert) {
+        if self.cursor.row == self.top_scroll {
+            self.buffers[self.curbuf].scroll_down(self.top_scroll, self.bottom_scroll);
+        } else {
+            self.move_cursor(CursorDir::Position(self.cursor.col + 1, self.cursor.row),
+                             insert);
+        }
+    }
 }
 
 /// Character and attribute buffer with scrolling.
@@ -540,8 +551,8 @@ impl ScreenBuffer {
         self.data.len()
     }
 
-    /// Scroll part of the screen, between the given top and bottom rows.
-    pub fn scroll(&mut self, top_row: u32, bottom_row: u32) {
+    /// Move the contents of the scroll window up one line, discarding the top line.
+    pub fn scroll_up(&mut self, top_row: u32, bottom_row: u32) {
         // Move the contents of [top_row + 1,bottom_row) into [top_row, bottom_row - 1).
         let dst_idx = top_row as usize * self.stride;
         let src_idx = dst_idx + self.stride;
@@ -552,6 +563,21 @@ impl ScreenBuffer {
         let bottom_idx = (bottom_row - 1) as usize * self.stride;
         for i in 0..self.stride {
             self.data[bottom_idx + i] = BLANK_CHAR;
+        }
+    }
+
+    /// Move the contents of the scroll window down one line, discarding the bottom line.
+    pub fn scroll_down(&mut self, top_row: u32, bottom_row: u32) {
+        // Move the contents of [top_row, bottom_row - 1) into [top_row + 1, bottom_row).
+        let src_idx = top_row as usize * self.stride;
+        let dst_idx = src_idx + self.stride;
+        let len = (bottom_row - top_row - 1) as usize * self.stride;
+        unsafe { std::ptr::copy(&self.data[src_idx], &mut self.data[dst_idx], len) };
+
+        // Clear the top row.
+        let top_idx = top_row as usize * self.stride;
+        for i in 0..self.stride {
+            self.data[top_idx + i] = BLANK_CHAR;
         }
     }
 }

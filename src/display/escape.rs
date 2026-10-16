@@ -78,6 +78,8 @@ pub enum EscapeResult {
     IRMI,
     /// Replace mode.
     IRMR,
+    /// Reverse index.
+    RI,
     /// Select Graphic Rendition.
     SGR(u8),
     /// Line position absolute.
@@ -140,7 +142,10 @@ impl Escape {
             self.state = match self.state {
                 State::Init => {
                     match chr {
-                        b'M' => State::Done,     // Reverse index
+                        b'M' => {
+                            self.result = EscapeResult::RI;
+                            State::Done
+                        },                       // Reverse index
                         b'P' => State::String,   // Device Control String
                         b'[' => State::CsiParam, // CSI
                         b']' => State::String,   // Operating System Command
