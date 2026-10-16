@@ -20,7 +20,10 @@ use crate::serial::SerialServer;
 /// The logical contents of the screen
 pub struct Screen {
     /// Screen contents (character and attrbitute for each position).
-    buffer: ScreenBuffer,
+    /// The two elements are for the primary (0) and alternative (1) buffers.
+    buffers: [ScreenBuffer; 2],
+    /// Which buffer is active.
+    curbuf: usize,
     /// Horizontal size in characters.
     pub columns: u32,
     /// Vertical size in characters.
@@ -53,7 +56,8 @@ impl Screen {
     pub fn new(columns: u32, rows: u32, cursor: Cursor) -> Result<Screen, ()> {
         println!("Screen size {columns}x{rows}");
         Ok(Screen {
-            buffer: ScreenBuffer::new(columns, rows),
+            buffers: [ ScreenBuffer::new(columns, rows), ScreenBuffer::new(columns, rows) ],
+            curbuf: 0,
             columns,
             rows,
             dirty: Some(Rect { left: 0, top: 0, right: columns - 1, bottom: rows - 1 }),
@@ -68,7 +72,7 @@ impl Screen {
     /// Get the character at the given column and row.
     pub fn char_at(&self, col: u32, row: u32) -> ScreenChar {
         let idx = ((row * self.columns) + col) as usize;
-        self.buffer.get_char(idx)
+        self.buffers[self.curbuf].get_char(idx)
     }
 
     /// Get the current dirty rectangle and reset to an empty one.
@@ -193,7 +197,8 @@ impl Screen {
             // The line may exceed the width of the screen. Drop extra characters, but keep
             // processing to detect a newline.
             if self.cursor.col < self.columns {
-                self.buffer.set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
+                self.buffers[self.curbuf].set_char(insert.bufidx,
+                                                   ScreenChar { chr, attr: self.attr });
                 insert.bufidx += 1;
                 self.cursor.col += 1;
             }
@@ -228,7 +233,7 @@ impl Screen {
         }
 
         // Update the buffer with the given character.
-        self.buffer.set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
+        self.buffers[self.curbuf].set_char(insert.bufidx, ScreenChar { chr, attr: self.attr });
         insert.bufidx += 1;
 
         // Update bounding rectangle of this insertion.
@@ -262,6 +267,7 @@ impl Screen {
 
         // Act on the result.
         match self.escape.result {
+            EscapeResult::ALTBUF(on) => self.altbuf(on),
             EscapeResult::ASCII => self.decsg = false,
             EscapeResult::CHA(c) =>
                 self.move_cursor(CursorDir::Position(c, self.cursor.row + 1), insert),
@@ -350,11 +356,11 @@ impl Screen {
     /// Delete num characters from the current position.
     fn delete(&mut self, num: u32, insert: &mut Insert) {
         for i in 0..num as usize {
-            if (insert.bufidx + i) == self.buffer.size() {
+            if (insert.bufidx + i) == self.buffers[self.curbuf].size() {
                 break;
             }
 
-            self.buffer.set_char(insert.bufidx + i, BLANK_CHAR);
+            self.buffers[self.curbuf].set_char(insert.bufidx + i, BLANK_CHAR);
         }
     }
 
@@ -372,7 +378,7 @@ impl Screen {
         };
 
         for idx in first_idx..(first_idx + count as usize) {
-            self.buffer.set_char(idx, BLANK_CHAR);
+            self.buffers[self.curbuf].set_char(idx, BLANK_CHAR);
         }
 
         // Assume the entire line needs to be updated.
@@ -387,14 +393,14 @@ impl Screen {
     /// 2 - all
     fn erase_page(&mut self, how: u32, insert: &mut Insert) {
         let (first_idx, last_idx) = match how {
-            0 => (insert.bufidx, self.buffer.size() - 1),
+            0 => (insert.bufidx, self.buffers[self.curbuf].size() - 1),
             1 => (0, insert.bufidx),
-            2 => (0, self.buffer.size() - 1),
+            2 => (0, self.buffers[self.curbuf].size() - 1),
             _ => { return; }
         };
 
         for idx in first_idx..=last_idx {
-            self.buffer.set_char(idx, BLANK_CHAR);
+            self.buffers[self.curbuf].set_char(idx, BLANK_CHAR);
         }
 
         // Assume the entire screen needs to be updated.
@@ -413,10 +419,10 @@ impl Screen {
         // Move characters in the line.
         let eolidx = ((row + 1) * self.columns) as usize - num;
         for idx in (insert.bufidx..eolidx).rev() {
-            self.buffer.set_char(idx + num, self.buffer.get_char(idx));
+            self.buffers[self.curbuf].set_char(idx + num, self.buffers[self.curbuf].get_char(idx));
         }
         for idx in 0..num {
-            self.buffer.set_char(insert.bufidx + idx, BLANK_CHAR);
+            self.buffers[self.curbuf].set_char(insert.bufidx + idx, BLANK_CHAR);
         }
 
         // Mark the line as dirty.
@@ -431,7 +437,7 @@ impl Screen {
         // Determine if scrolling is needed.
         if row >= self.rows {
             // Rotate the buffer.
-            self.buffer.scroll();
+            self.buffers[self.curbuf].scroll();
 
             // Now inserting into the new bottom row.
             self.cursor.row = self.rows - 1;
@@ -449,6 +455,16 @@ impl Screen {
     /// Return a rectangle encompassing the entire screen
     fn full_rect(&self) -> Rect {
         Rect { left: 0, top: 0, right: self.columns - 1, bottom: self.rows - 1 }
+    }
+
+    /// Select between the primary and alternative buffers.
+    fn altbuf(&mut self, on: bool) {
+        self.curbuf = match on {
+            true => 1,
+            false => 0
+        };
+
+        self.set_dirty(&self.full_rect());
     }
 }
 

@@ -32,6 +32,8 @@ pub struct Escape {
 pub enum EscapeResult {
     /// Parsing failed.
     None,
+    /// Enable/Disable alternate buffer.
+    ALTBUF(bool),
     /// ASCII character set.
     ASCII,
     /// Cursor character absolute.
@@ -360,6 +362,7 @@ impl Escape {
         match self.param(0, 0) {
             1 => EscapeResult::DECCKMA,
             25 => EscapeResult::DECTCEMS,
+            1049 => EscapeResult::ALTBUF(true),
             _ => EscapeResult::None
         }
     }
@@ -369,6 +372,7 @@ impl Escape {
         match self.param(0, 0) {
             1 => EscapeResult::DECCKMN,
             25 => EscapeResult::DECTCEMH,
+            1049 => EscapeResult::ALTBUF(false),
             _ => EscapeResult::None
         }
     }
