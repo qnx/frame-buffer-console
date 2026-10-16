@@ -162,11 +162,6 @@ impl Display {
     pub fn framebuffer_size(&self) -> (u32, u32) {
         (self.obj.width, self.obj.height)
     }
-
-    pub fn set_cr_to_nl(&self, cr_to_nl: bool) {
-        let mut screen = self.obj.screen.lock().unwrap();
-        screen.cr_to_nl = cr_to_nl;
-    }
 }
 
 /// Thread for drawing the contents of the screen whenever these are updated.

@@ -269,9 +269,6 @@ impl SerialServer {
         self.attr.control = attr.c_cflag;
         self.attr.local = attr.c_lflag;
 
-        // Apply changes to the display.
-        self.display.set_cr_to_nl((attr.c_iflag & libc::ICRNL) != 0);
-
         // Check if entering canonical mode.
         if !was_canonical && self.attr.is_canonical() {
             self.lineedit.set_line(self.display.get_cursor_pos().1);

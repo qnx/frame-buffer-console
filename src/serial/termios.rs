@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Default settings taken from io-char when started in edit mode.
 const DEFAULT_IFLAG: u32 = libc::IMAXBEL | libc::INPCK | libc::BRKINT | libc::ICRNL | libc::IXON |
                         libc::IXOFF;
 const DEFAULT_OFLAG: u32 = libc::ONLCR | libc::OPOST;

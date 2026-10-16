@@ -30,8 +30,6 @@ pub struct Screen {
     pub rows: u32,
     /// Cursor position and shape.
     pub cursor: Cursor,
-    /// Translate carriage return to newline.
-    pub cr_to_nl: bool,
     /// Region of updated contents.
     dirty: Option<Rect>,
     /// Current attributes.
@@ -68,7 +66,6 @@ impl Screen {
             cursor,
             attr: DEFAULT_ATTR,
             escape: Escape::new(),
-            cr_to_nl: false,
             decsg: false,
             top_scroll: 0,
             bottom_scroll: rows
@@ -158,13 +155,7 @@ impl Screen {
                 0x07 => self.bell(),
                 0x08 => self.move_cursor(CursorDir::Back(1), &mut insert),
                 0x1b => pos += self.maybe_escape(&mut insert, &chrs[pos + 1..]),
-                b'\r' => {
-                    if self.cr_to_nl {
-                        self.newline(&mut insert)
-                    } else {
-                        self.move_cursor(CursorDir::BOL, &mut insert)
-                    }
-                }
+                b'\r' => self.move_cursor(CursorDir::BOL, &mut insert),
                 _ => self.insert_char(chr, &mut insert)
             }
 
