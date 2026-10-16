@@ -259,7 +259,11 @@ impl IoMsgImpl for SerialServer {
             _ => { return Err(libc::EINVAL); }
         };
 
-        if flags != libc_missing::_NOTIFY_COND_INPUT {
+        // FIXME:
+        // Better define the set of supported flags.
+        // For now this is sufficient for poll() and select().
+        if (flags != libc_missing::_NOTIFY_COND_INPUT) &&
+           (flags != libc_missing::_NOTIFY_COND_INPUT | libc_missing::_NOTIFY_COND_OBAND) {
             return Err(libc::EINVAL);
         }
 
