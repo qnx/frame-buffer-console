@@ -15,6 +15,7 @@
 use crate::display::DEFAULT_ATTR;
 
 /// Escape sequence parser.
+#[derive(Debug)]
 pub struct Escape {
     /// Parser state.
     state: State,
@@ -339,6 +340,11 @@ impl Escape {
     /// Convert a CSI graphics command to character attributes.
     /// Currently only handles foreground and background colours.
     fn sgr_to_attr(&self, mut attr: u8) -> EscapeResult {
+        if self.params.len() == 0 {
+            // No parameters, reset.
+            return EscapeResult::SGR(DEFAULT_ATTR);
+        }
+
         for i in 0..self.params.len() {
             let param = self.params[i];
             if param == 0 {
