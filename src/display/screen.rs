@@ -482,8 +482,6 @@ impl Screen {
     /// Set a new scroll region.
     /// Row values are 1-based.
     fn set_scroll_region(&mut self, top: u32, bottom: u32, insert: &mut Insert) {
-        println!("set_scroll_region {top} {bottom}");
-
         self.bottom_scroll = {
             if bottom > self.rows {
                 self.rows - 1
