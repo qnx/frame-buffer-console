@@ -74,6 +74,8 @@ pub enum EscapeResult {
     ED(u32),
     /// Insert character.
     ICH(u32),
+    /// Insert lines.
+    IL(u32),
     /// Insert mode.
     IRMI,
     /// Replace mode.
@@ -305,6 +307,7 @@ impl Escape {
             b'H' => EscapeResult::CUP(self.param(0, 1), self.param(1, 1)),
             b'J' => EscapeResult::ED(self.param(0, 0)),
             b'K' => EscapeResult::EL(self.param(0, 0)),
+            b'L' => EscapeResult::IL(self.param(0, 1)),
             b'P' => EscapeResult::DCH(self.param(0, 1)),
             b'@' => EscapeResult::ICH(self.param(0, 1)),
             b'c' => match self.prefix {

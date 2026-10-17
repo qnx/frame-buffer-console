@@ -279,6 +279,7 @@ impl Screen {
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
+            EscapeResult::IL(n) => self.insert_lines(n, insert),
             EscapeResult::RI => self.reverse_index(insert),
             EscapeResult::SGR(attr) => self.attr = attr,
             EscapeResult::VPA(r) =>
@@ -511,10 +512,30 @@ impl Screen {
     fn reverse_index(&mut self, insert: &mut Insert) {
         if self.cursor.row == self.top_scroll {
             self.buffers[self.curbuf].scroll_down(self.top_scroll, self.bottom_scroll);
+            insert.rect = self.full_rect();
         } else {
             self.move_cursor(CursorDir::Position(self.cursor.col + 1, self.cursor.row),
                              insert);
         }
+    }
+
+    /// Insert blank lines.
+    fn insert_lines(&mut self, n: u32, insert: &mut Insert) {
+        // Has no effect outside the scroll region.
+        let row = self.cursor.row;
+        if row < self.top_scroll || row > self.bottom_scroll {
+            return;
+        }
+
+
+        // FIXME:
+        // scroll_down() could do multiple lines at a time, avoiding excessive copies, but is this
+        // a common enough case to optimize?
+        for _ in 0..n {
+            self.buffers[self.curbuf].scroll_down(row, self.bottom_scroll);
+        }
+
+        insert.rect = self.full_rect();
     }
 }
 
