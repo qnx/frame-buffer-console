@@ -40,7 +40,7 @@ pub struct Screen {
     decsg: bool,
     /// Top line of the scrolling region.
     top_scroll: u32,
-    /// Bottom line of the scrolling region.
+    /// Bottom line of the scrolling region (inclusive).
     bottom_scroll: u32,
 }
 
@@ -68,7 +68,7 @@ impl Screen {
             escape: Escape::new(),
             decsg: false,
             top_scroll: 0,
-            bottom_scroll: rows
+            bottom_scroll: rows - 1
         })
     }
 
@@ -275,7 +275,7 @@ impl Screen {
             EscapeResult::DECCKMA => SerialServer::set_cursor_key_escape_char(b'O'),
             EscapeResult::DECCKMN => SerialServer::set_cursor_key_escape_char(b'['),
             EscapeResult::DECSG => self.decsg = true,
-            EscapeResult::DECSTBM(t, b) => self.set_scroll_region(t, b),
+            EscapeResult::DECSTBM(t, b) => self.set_scroll_region(t, b, insert),
             EscapeResult::EL(n) => self.erase_line(n, insert),
             EscapeResult::ED(n) => self.erase_page(n, insert),
             EscapeResult::ICH(n) => self.shift(n, insert),
@@ -434,12 +434,12 @@ impl Screen {
     /// be updated directly.
     fn update_cursor(&mut self, col: u32, row: u32, insert: &mut Insert) {
         // Determine if scrolling is needed.
-        if row >= self.bottom_scroll && self.cursor.row < self.bottom_scroll {
+        if row > self.bottom_scroll && self.cursor.row <= self.bottom_scroll {
             // Rotate the buffer.
             self.buffers[self.curbuf].scroll_up(self.top_scroll, self.bottom_scroll);
 
             // Now inserting into the new bottom row.
-            self.cursor.row = self.bottom_scroll - 1;
+            self.cursor.row = self.bottom_scroll;
 
             // The entire screen needs to be updated.
             self.dirty = Some(self.full_rect());
@@ -476,21 +476,21 @@ impl Screen {
         // It's not clear how the scroll area is supposed to be restored, so doing it here just
         // ensure that exiting a program like Vim does not leave a restricted scroll window behind.
         self.top_scroll = 0;
-        self.bottom_scroll = self.rows;
+        self.bottom_scroll = self.rows - 1;
     }
 
     /// Set a new scroll region.
     /// Row values are 1-based.
-    fn set_scroll_region(&mut self, top: u32, bottom: u32) {
+    fn set_scroll_region(&mut self, top: u32, bottom: u32, insert: &mut Insert) {
         println!("set_scroll_region {top} {bottom}");
 
         self.bottom_scroll = {
             if bottom > self.rows {
-                self.rows
+                self.rows - 1
             } else if bottom > 0 {
                 bottom - 1
             } else {
-                self.rows
+                self.rows - 1
             }
         };
 
@@ -503,6 +503,10 @@ impl Screen {
                 0
             }
         };
+
+        self.cursor.col = 0;
+        self.cursor.row = self.top_scroll;
+        insert.bufidx = (self.cursor.row * self.columns + self.cursor.col) as usize;
     }
 
     /// Move the cursor one line up, scrolling if the cursor is already at the top margin.
@@ -556,11 +560,11 @@ impl ScreenBuffer {
         // Move the contents of [top_row + 1,bottom_row) into [top_row, bottom_row - 1).
         let dst_idx = top_row as usize * self.stride;
         let src_idx = dst_idx + self.stride;
-        let len = (bottom_row - top_row - 1) as usize * self.stride;
+        let len = (bottom_row - top_row) as usize * self.stride;
         unsafe { std::ptr::copy(&self.data[src_idx], &mut self.data[dst_idx], len) };
 
         // Clear the bottom row.
-        let bottom_idx = (bottom_row - 1) as usize * self.stride;
+        let bottom_idx = bottom_row as usize * self.stride;
         for i in 0..self.stride {
             self.data[bottom_idx + i] = BLANK_CHAR;
         }
@@ -571,7 +575,7 @@ impl ScreenBuffer {
         // Move the contents of [top_row, bottom_row - 1) into [top_row + 1, bottom_row).
         let src_idx = top_row as usize * self.stride;
         let dst_idx = src_idx + self.stride;
-        let len = (bottom_row - top_row - 1) as usize * self.stride;
+        let len = (bottom_row - top_row) as usize * self.stride;
         unsafe { std::ptr::copy(&self.data[src_idx], &mut self.data[dst_idx], len) };
 
         // Clear the top row.
