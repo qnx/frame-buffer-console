@@ -1,5 +1,5 @@
 [package]
-name = "uefi-console"
+name = "devc-con-framebuffer"
 version = "0.1.0"
 edition = "2024"
 
