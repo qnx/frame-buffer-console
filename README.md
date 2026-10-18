@@ -1,2 +1,225 @@
-# frame-buffer-console
-Simple console for frame buffer devices which required no network and graphics 
+QNX Frame-Buffer Console and Character Device
+============================================
+
+This program provides a combination of a character device and a frame-buffer-based
+console, written in Rust. The primary use case is to help with early board
+development, or with troubleshooting, when other ways to communicate with the
+system (GUI, network) are not available.
+
+## Notice on Software Maturity and Quality
+
+The software included in this repository is classified under the QNX Software
+Maturity Standard as Experimental Software.
+
+As defined in the QNX Development License Agreement
+(http://www.qnx.com/download/feature.html?programid=68651), Experimental
+Software represents early-stage deliverables intended for evaluation or
+proof-of-concept purposes.
+
+Experimental software is provided without one or more of the following:
+
+* Formal requirements
+* Formal design or architecture
+* Formal testing
+* Formal support
+* Formal documentation
+* Certifications of any type
+* End-of-Life or End-of-Support policy
+
+Additionally, this software is not monitored or scanned under our Cybersecurity
+Management Standard.
+
+No warranties, guarantees, or claims are offered. Please refer to the QDL for
+more details about our support and maintenance policy for Experimental Software.
+
+## Prerequisites
+
+1. Rust v1.97
+2. The libc crate v0.2 (automatically fetched as a dependency)
+3. The startup program for the system needs to expose a working frame-buffer as a
+hardware tag called `framebuffer`, with the following layout:
+
+```
+size: u16,
+name: u16,
+pad: u32,
+buffer: u64,
+bufsize: u32,
+hres: u32,
+vres: u32,
+stride: u32
+```
+
+## Building
+
+This project uses the standard Cargo build system. For example, to build a
+release version for QNX 8.0/x86_64:
+
+```
+$ cargo build --release --target x86_64-pc-qnx
+```
+
+or a debug version for QNX 8.0/ARMv8:
+
+```
+$ cargo build --release --target aarch64-unknown-qnx
+```
+
+## Structure
+
+The code comprises four modules:
+
+1. `serial` - the character device driver
+2. `display` - the frame-buffer graphical console
+3. `hid` - client code for interacting with the `io-hid` server
+4. `qnxmsg` - generic infrastructure for writing a QNX resource manager
+
+### Serial
+
+The `serial` module provides a character device, which registers itself under
+`/dev/confb` (for console frame-buffer). Clients of the device (primarily
+processes whose controlling terminal is provided by this device) can then use
+standard I/O messages (`_IO_WRIRE`, `_IO_READ`, `_IO_DEVCTL`) to interact with
+the device. Clients written in C will typically use C library functions such
+as `write()`, `read()`, `tcsetattr()`, etc. instead of raw messages.
+
+The device driver accepts input from two main sources:
+
+1. client processes, via an `_IO_WRITE` message (see `serial::IoMsg::write()`);
+2. input devices (e.g., a USB keyboard), delivered as pulses from the HID module
+   (see `serial::Serial::key_event`).
+
+Input from both sources is directed to the Display module for further parsing
+and display on the screen. Input from an input device is also provided for
+clients to read (see `serial::Serial::data_available`).
+
+The device also implements a basic line editor for use when a client requests
+canonical mode. Input from the line editor is provided to the client only when a
+line is terminated, as opposed to every key stroke in non-canonical (default)
+mode.
+
+The character device implemented by this module can act as a controlling
+terminal for a session, as defined by POSIX. Only one session can be active at a
+time. Within the session, the device keeps track of the foreground process
+group, which can be changed via the `DCMD_CHR_TCSETPGRP` control message
+(typically invoked by a session leader with the C library function
+`tcsetpgrp()`).
+
+### Display
+
+The display module keeps track of the current screen contents, and uses the
+frame-buffer to draw the text on the screen.
+
+#### Screen
+
+The first task is handled by the `Screen` structure and implementation. The
+screen maintains two buffers (primary and alternative), each capable of holding
+a character and its graphical attributes for each position on the display. The
+screen's active buffer is written by the Serial module in response to input
+events, and is read by a dedicated thread in the Display module that draws to
+the frame-buffer. As such the `Screen` object is protected by a mutex.
+
+Input is fed to the screen primarily via the
+`screen::Screen::insert_at_cursor()` function. As its name suggests, the
+function accepts data to be added at the current cursor position. Input
+comprises both characters to be displayed and various control sequences. The
+`Screen` module provides a parser for standard (and not-so-standard) escape
+sequences.
+
+Updates to the screen result in a condition variable signalling to the display
+thread that it should redraw the contents of the screen. The `Screen` structures
+keeps track of the area that needs to be updated (the dirty rectangle).
+
+The screen's size is measured in columns and rows. By default, the screen size
+matches the width and height of the display in pixels, when divided by the
+selected font's character width and height, respectively. A smaller screen size
+can be selected by the `--screen-size COLUMNSxROWS` command-line argument.
+
+#### Framebuffer
+
+The `Framebuffer` structure holds the mapped hardware frame-buffer. The buffer
+is assumed to use 32 bits for each pixel in RGBA format. Memory writes to any
+location in the frame-buffer cause the corresponding screen pixel to be changed
+immediately.
+
+Optionally, the `Framebuffer` structure can use a separate buffer for drawing
+the glyphs, which is then copied in its entirety to the memory-mapped hardware
+buffer. This is referred to as "double-buffering", and is enabled by providing
+the `--double-buffer` command-line option. Use of double-buffering is not
+necessary, but can reduce flickering on the screen in some cases.
+
+#### Display Thread
+
+The `display::screen_update_thread()` function is the entry point for a thread
+dedicated to drawing the screen. The thread waits on a condition variable,
+signalled by updates to the screen. Updates are throttled by a timer, to avoid
+repeated updates causing drawing artifacts.
+
+### HID
+
+This module acts as a client to the `io-hid` server, which provides input
+reports from various devices. The implementation only looks for one keyboard
+device, ignoring any other devices the server advertises.
+
+Interaction with the server is done via synchronous poll messages. A dedicated
+thread is used for polling, to avoid the entire process blocking until a new
+report is available (see `hid::poll_thread`). The server responds to the message
+when a report is available. A report may be one of:
+
+1. a new input device is available
+2. an input device is removed
+3. an input device reports its status.
+
+The module accepts the first keyboard device it sees as the one from which to
+receive status updates. The status updates are composed of 8 bytes, which
+together say which key is pressed along with any modifiers. Note that an idle
+keyboard can produce periodic reports when no key is pressed.
+
+The `Keyboard` structure and implementation is responsible for translating
+status reports into key events, including:
+
+1. a key is pressed for the first time;
+2. a modifier is pressed;
+3. a key is pressed and held continuously.
+
+These three cases translate into key events (including the character and any
+modifier) sent to the `Serial` module via pulses. Each pulse represents a single
+key combination being pressed. Continuous key presses generate periodic pulses
+of the same key combination.
+
+### Resource Manager
+
+The `qnxmsg` module is the infrastructure required for implementing a QNX
+resource manager in Rust. A resource manager is a server that attaches to a
+specific path and then services various standard I/O messages.
+
+The module uses a single channel for receiving messages. When a client first
+requires services from the resource manager, it connects to the channel and then
+sends an `_IO_CONNECT` message to establish the connection. This interaction is
+typically encapsulated by the C library `open()` call.
+
+When the server accepts the client's connection, a `Connection` object is added
+to a hash table. The connection is uniquely identified by the client's 64-bit
+process ID and 32-bit connection ID. This object is the equivalent of an "open
+connection block" (OCB) in other implementations.
+
+A message exchange between a client and a server is represented by a
+`Transaction` object. The transaction is uniquely identified by the received ID
+(`rcvid`) assigned by the kernel and returned from the `MsgReceive()` kernel
+call invoked by the server's message loop. The transaction object is passed to
+every message handler and is used for various purposes:
+
+1. identifying the client and the connection on which the message was sent;
+2. reading more data from long messages;
+3. as a way to reply to the client.
+
+The implementation accepts a message from the client into a generic buffer,
+defined by the `MsgBuf` structure. The contents of the buffer are then
+transmuted into the type of message expected by a handler. Optionally, some
+messages accept further information from this buffer, as when the message type
+defines only a header (e.g., the structure for the `_IO_WRITE` message does not
+hold the data to write).
+
+The generic handler for each I/O message invokes a type-specific handler, as
+defined by the `IoMsg` trait. This trait is implemented for the `Serial`
+structure, which is how the device driver handles its I/O messages.
