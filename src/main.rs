@@ -34,13 +34,11 @@ fn main() {
     while let Some(arg) = args.next() {
         match arg.to_str().unwrap_or_default() {
             "--double-buffer" => double_buffer = true,
-            "--screen-size" => if let Some(screen_size_str) = args.next() {
-                screen_size = parse_string_size(screen_size_str);
+            "--screen-size" => {
+                screen_size = parse_string_size(args.next());
                 if screen_size.is_none() {
                     println!("Invalid value for screen-size");
                 }
-            } else {
-                println!("Invalid value for screen-size");
             }
             _ => {}
         };
@@ -62,8 +60,9 @@ fn main() {
     server.message_loop();
 }
 
-fn parse_string_size(screen_size_str: OsString) -> Option<(u32, u32)> {
-    let str = match screen_size_str.into_string() {
+/// Extract the numeric values from a "<columns>x<rows>" command line argument.
+fn parse_string_size(screen_size_str: Option<OsString>) -> Option<(u32, u32)> {
+    let str = match screen_size_str?.into_string() {
         Ok(str) => str,
         Err(_) => return None
     };
