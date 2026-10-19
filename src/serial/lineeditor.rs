@@ -27,13 +27,15 @@ pub struct LineEditor {
     len: usize,
     /// Insertion position.
     pos: usize,
+    /// Whether echo is on.
+    echo: bool
 }
 
 impl LineEditor {
     pub fn new(columns: u32) -> Self {
         let mut buffer = Vec::<u8>::with_capacity(columns as usize);
         buffer.resize(columns as usize, 0);
-        LineEditor { buffer, len: 0, pos: 0 }
+        LineEditor { buffer, len: 0, pos: 0, echo: true }
     }
 
     /// Start editing the given line.
@@ -45,6 +47,11 @@ impl LineEditor {
     /// Get the contents of the line buffer.
     pub fn get_line(&self) -> &[u8] {
         &self.buffer[0..self.len]
+    }
+
+    /// Toggle echo mode.
+    pub fn set_echo(&mut self, echo: bool) {
+        self.echo = echo;
     }
 
     /// Handle a key event in canonical mode.
@@ -83,7 +90,9 @@ impl LineEditor {
         self.len += 1;
 
         // Update the display.
-        display.insert_at_cursor(&self.buffer[self.pos..self.len], Some(1));
+        if self.echo {
+            display.insert_at_cursor(&self.buffer[self.pos..self.len], Some(1));
+        }
 
         self.pos += 1;
 
@@ -95,7 +104,9 @@ impl LineEditor {
             b'a' => {
                 // Ctrl-A, go to beginning of line
                 self.pos = 0;
-                display.move_in_line(CursorDir::BOL);
+                if self.echo {
+                    display.move_in_line(CursorDir::BOL);
+                }
                 None
             }
             b'd' => {
@@ -104,7 +115,9 @@ impl LineEditor {
             }
             b'e' => {
                 // Ctrl-E, go to end of line
-                display.move_in_line(CursorDir::Forward((self.len - self.pos) as u32));
+                if self.echo {
+                    display.move_in_line(CursorDir::Forward((self.len - self.pos) as u32));
+                }
                 self.pos = self.len;
                 None
             }
@@ -118,13 +131,17 @@ impl LineEditor {
             KEY_LEFT_ARROW => {
                 if self.pos > 0 {
                     self.pos -= 1;
-                    display.move_in_line(CursorDir::Back(1));
+                    if self.echo {
+                        display.move_in_line(CursorDir::Back(1));
+                    }
                 }
             }
             KEY_RIGHT_ARROW => {
                 if self.pos < self.len {
                     self.pos += 1;
-                    display.move_in_line(CursorDir::Forward(1));
+                    if self.echo {
+                        display.move_in_line(CursorDir::Forward(1));
+                    }
                 }
             }
             _ => {}
@@ -139,8 +156,10 @@ impl LineEditor {
         self.buffer[self.len] = b'\n';
 
         // Add a newline to the screen.
-        let lf = [b'\n'];
-        display.insert_at_cursor(&lf, None);
+        if self.echo {
+            let lf = [b'\n'];
+            display.insert_at_cursor(&lf, None);
+        }
         self.len += 1;
 
         // Let the caller know that processing is done for this line.
@@ -159,8 +178,11 @@ impl LineEditor {
 
             // Update the display.
             // The slice includes the space that was added at the formerly-last position.
-            display.move_in_line(CursorDir::Back(1));
-            display.insert_at_cursor(&self.buffer[self.pos..self.len], Some(0));
+            if self.echo {
+                display.move_in_line(CursorDir::Back(1));
+                display.insert_at_cursor(&self.buffer[self.pos..self.len], Some(0));
+            }
+
             self.len -= 1;
         }
 

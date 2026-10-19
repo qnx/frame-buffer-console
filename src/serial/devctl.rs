@@ -270,6 +270,7 @@ impl SerialServer {
 
         // Apply new attributes.
         let was_canonical = self.attr.is_canonical();
+        let was_echo = self.attr.echo_on();
         self.attr.input = attr.c_iflag;
         self.attr.output = attr.c_oflag;
         self.attr.control = attr.c_cflag;
@@ -278,6 +279,11 @@ impl SerialServer {
         // Check if entering canonical mode.
         if !was_canonical && self.attr.is_canonical() {
             self.lineedit.reset_line();
+        }
+
+        // Check for a change to echo mode.
+        if was_echo != self.attr.echo_on() {
+            self.lineedit.set_echo(self.attr.echo_on());
         }
 
         trans.reply(0);
