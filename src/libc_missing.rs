@@ -59,6 +59,7 @@ unsafe extern "C" {
 
     pub fn procmgr_session_ext(reserved: u32, sid: libc::pid_t, xid: i32, id: i32, event: u32) ->
         i32;
+    pub fn procmgr_daemon(status: i32, flags: u32) -> i32;
 
     pub fn rsrcdbmgr_devno_attach(name: *const libc::c_char, minor_request: libc::c_int,
                                   flags: libc::c_int) -> libc::dev_t;

@@ -28,12 +28,14 @@ fn main() {
     // Parse command-line arguments.
     let mut double_buffer = false;
     let mut screen_size: Option<(u32, u32)> = None;
+    let mut daemonize = true;
 
     let args = env::args_os().skip(1);
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.to_str().unwrap_or_default() {
             "--double-buffer" => double_buffer = true,
+            "--no-daemon" => daemonize = false,
             "--screen-size" => {
                 screen_size = parse_string_size(args.next());
                 if screen_size.is_none() {
@@ -55,6 +57,11 @@ fn main() {
     let machine = confstr(libc_missing::_CS_MACHINE);
     let msg = format!("\x1b[1;31mWelcome to QNX {release} on {host} {machine}\n\x1b[0m");
     display.insert_at_cursor(msg.as_bytes());
+
+    // Daemonize the process.
+    if daemonize {
+        unsafe { libc_missing::procmgr_daemon(0, 0) };
+    }
 
     // Run the server's message loop.
     server.message_loop();

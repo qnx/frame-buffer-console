@@ -80,7 +80,7 @@ $ cargo build --release --target aarch64-unknown-qnx
 ## Usage
 
 ```
-$ devc-con-framebuffer [--double-buffer] [--screen-size COLUMNSSxROWS]
+$ devc-con-framebuffer [--double-buffer] [--screen-size COLSxROWS] [--no-daemon]
 ```
 
 Typically, the console is added to the image file system (IFS) of a QNX system,
@@ -167,7 +167,7 @@ keeps track of the area that needs to be updated (the dirty rectangle).
 The screen's size is measured in columns and rows. By default, the screen size
 matches the width and height of the display in pixels, when divided by the
 selected font's character width and height, respectively. A smaller screen size
-can be selected by the `--screen-size COLUMNSxROWS` command-line argument.
+can be selected by the `--screen-size COLSxROWS` command-line argument.
 
 #### Framebuffer
 
