@@ -6,6 +6,18 @@ console, written in Rust. The primary use case is to help with early board
 development, or with troubleshooting, when other ways to communicate with the
 system (GUI, network) are not available.
 
+## Contents
+
+* [Notice on Software Maturity and Quality](#notice-on-software-maturity-and-quality)
+* [Prerequisites](#prerequisites)
+* [Building](#building)
+* [Usage](#usage)
+* [Code Structure](#code-structure)
+    * [Serial](#serial)
+    * [Display](#display)
+    * [HID](#hid)
+    * [Resource Manager](#resource-manager)
+
 ## Notice on Software Maturity and Quality
 
 The software included in this repository is classified under the QNX Software
