@@ -46,6 +46,11 @@ fn main() {
         };
     }
 
+    // Daemonize the process.
+    if daemonize {
+        unsafe { libc_missing::procmgr_daemon(0, 0) };
+    }
+
     // Create the top-level objects.
     let mut display = Display::new(double_buffer, screen_size).unwrap();
     let mut server = SerialServer::new(&display);
@@ -57,11 +62,6 @@ fn main() {
     let machine = confstr(libc_missing::_CS_MACHINE);
     let msg = format!("\x1b[1;31mWelcome to QNX {release} on {host} {machine}\n\x1b[0m");
     display.insert_at_cursor(msg.as_bytes());
-
-    // Daemonize the process.
-    if daemonize {
-        unsafe { libc_missing::procmgr_daemon(0, 0) };
-    }
 
     // Run the server's message loop.
     server.message_loop();
