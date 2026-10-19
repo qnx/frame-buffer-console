@@ -65,7 +65,29 @@ or a debug version for QNX 8.0/ARMv8:
 $ cargo build --release --target aarch64-unknown-qnx
 ```
 
-## Structure
+## Usage
+
+```
+$ devc-con-framebuffer [--double-buffer] [--screen-size COLUMNSSxROWS]
+```
+
+Typically, the console is added to the image file system (IFS) of a QNX system,
+and started early on in the boot script of the image
+
+```
+display_msg "---> Starting Console"
+devc-con-framebuffer
+waitfor /dev/confb
+reopen /dev/confb
+```
+
+The `reopen` call connects the standard input, output and error file descriptors
+of future processes to the console.
+
+Note that the console needs to be started after `io-hid`, which in turn may
+depend on other components (e.g., the USB driver).
+
+## Code Structure
 
 The code comprises four modules:
 
