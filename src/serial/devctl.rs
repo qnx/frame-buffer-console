@@ -30,6 +30,7 @@ const DCMD_CHR_TCGETPGRP: u32 = 0x40047477;
 const DCMD_CHR_TCGETATTR : u32 = 0x404c7413;
 const DCMD_CHR_TCSETATTR : u32 = 0x804c7414;
 const DCMD_CHR_TCSETATTRD : u32 = 0x804c7415;
+const DCMD_CHR_TCSETATTRF : u32 = 0x804c7416;
 const DCMD_CHR_TCGETSIZE : u32 = 0x40087468;
 const DCMD_CHR_TCSETSIZE : u32 = 0x80087467;
 const DCMD_CHR_TCFLUSH: u32 = 0x80047410;
@@ -119,6 +120,11 @@ impl SerialServer {
             DCMD_CHR_TCGETATTR => self.tcgetattr(trans),
             DCMD_CHR_TCSETATTR => self.tcsetattr(payload, trans),
             DCMD_CHR_TCSETATTRD => self.tcsetattr(payload, trans),
+            DCMD_CHR_TCSETATTRF => {
+                self.tcsetattr(payload, trans)?;
+                self.input_buffer.flush();
+                Ok(())
+            }
             DCMD_CHR_TCGETSIZE => self.tcgetsize(trans),
             DCMD_CHR_TCSETSIZE => self.tcsetsize(payload, trans),
             DCMD_CHR_TTYINFO => self.ttyinfo(trans),
@@ -338,8 +344,8 @@ impl SerialServer {
 
         match *which {
             TCIFLUSH => self.input_buffer.flush(),
-            TCOFLUSH => self.input_buffer.flush(),
-            TCIOFLUSH => {},
+            TCIOFLUSH => self.input_buffer.flush(),
+            TCOFLUSH => {},
             _ => { return Err(libc::EINVAL); }
         };
 
