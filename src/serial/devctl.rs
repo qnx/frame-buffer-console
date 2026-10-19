@@ -271,7 +271,7 @@ impl SerialServer {
 
         // Check if entering canonical mode.
         if !was_canonical && self.attr.is_canonical() {
-            self.lineedit.set_line(self.display.get_cursor_pos().1);
+            self.lineedit.reset_line();
         }
 
         trans.reply(0);

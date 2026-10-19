@@ -133,9 +133,10 @@ impl Screen {
 
     /// Insert multiple characters at the cursor's position.
     /// The cursor is updated to one past the last inserted character's position.
-    pub fn insert_at_cursor(&mut self, chrs: &[u8]) {
+    pub fn insert_at_cursor(&mut self, chrs: &[u8], cursor_shift: Option<u32>) {
         // Mark starting position.
-        let mut insert = Insert::new(self, self.cursor.col, self.cursor.row);
+        let (col, row) = (self.cursor.col, self.cursor.row);
+        let mut insert = Insert::new(self, col, row);
         let mut pos = 0;
 
         // Resume parsing an escape sequence from a previous call.
@@ -162,51 +163,18 @@ impl Screen {
             pos += 1;
         }
 
-        // Set new cursor position.
-        insert.update_rect(self.cursor.col, self.cursor.row);
-
         // Update the dirty rectangle.
-        self.set_dirty(&insert.rect);
-    }
-
-    /// Insert characters at the given row and column.
-    /// This is used to implement canonical mode line editing, and therefore should only affect the
-    /// given row.
-    /// Note that it is assumed all characters are displayable (should be taken care of by the line
-    /// editor).
-    pub fn insert_line(&mut self, chrs: &[u8], row: u32, col: u32, cursor_col: u32) {
-        // Add characters.
-        let mut insert = Insert::new(self, col, row);
-
-        // Insert characters.
-        for chr in chrs {
-            let chr = *chr;
-
-            // Stop at a newline.
-            if chr == b'\n' {
-                // Add the current position to the dirty rectangle, as it may hold a cursor that
-                // needs to be cleared.
-                insert.update_rect(self.cursor.col, self.cursor.row);
-                self.newline(&mut insert);
-                break;
-            }
-
-            // The line may exceed the width of the screen. Drop extra characters, but keep
-            // processing to detect a newline.
-            if self.cursor.col < self.columns {
-                self.buffers[self.curbuf].set_char(insert.bufidx,
-                                                   ScreenChar { chr, attr: self.attr });
-                insert.bufidx += 1;
-                self.cursor.col += 1;
-            }
-        }
-
-        // Set new cursor position.
         insert.update_rect(self.cursor.col, self.cursor.row);
-        self.cursor.col = cursor_col;
-
-        // Update the dirty rectangle.
         self.set_dirty(&insert.rect);
+
+        // A non-None value to cursor shift overrides the cursor position.
+        match cursor_shift {
+            Some(shift) => {
+                self.cursor.col = std::cmp::min(col + shift, self.columns - 1);
+                self.cursor.row = row;
+            }
+            None => {}
+        };
     }
 
     pub fn move_in_line(&mut self, dir: CursorDir) {

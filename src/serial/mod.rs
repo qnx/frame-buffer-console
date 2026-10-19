@@ -160,7 +160,7 @@ impl SerialServer {
         let chr = key.as_char();
         if self.attr.echo_on() {
             let chrs = [chr];
-            self.display.insert_at_cursor(&chrs);
+            self.display.insert_at_cursor(&chrs, None);
         }
 
         let chrs: [u8; 1] = [chr];
@@ -216,7 +216,7 @@ impl SerialServer {
 
         // Start editing the next line.
         // Note that scrolling can affect the resulting line number.
-        self.lineedit.set_line(self.display.get_cursor_pos().1);
+        self.lineedit.reset_line();
     }
 
     /// Handle end-of-transmission (typically Ctrl-D) in canonical mode.

@@ -27,20 +27,17 @@ pub struct LineEditor {
     len: usize,
     /// Insertion position.
     pos: usize,
-    /// Screen row being edited.
-    row: u32
 }
 
 impl LineEditor {
     pub fn new(columns: u32) -> Self {
         let mut buffer = Vec::<u8>::with_capacity(columns as usize);
         buffer.resize(columns as usize, 0);
-        LineEditor { buffer, len: 0, pos: 0, row: 0 }
+        LineEditor { buffer, len: 0, pos: 0 }
     }
 
     /// Start editing the given line.
-    pub fn set_line(&mut self, row: u32) {
-        self.row = row;
+    pub fn reset_line(&mut self) {
         self.pos = 0;
         self.len = 0;
     }
@@ -86,8 +83,7 @@ impl LineEditor {
         self.len += 1;
 
         // Update the display.
-        display.insert_line(&self.buffer[self.pos..self.len], self.row, self.pos as u32,
-                            (self.pos + 1) as u32);
+        display.insert_at_cursor(&self.buffer[self.pos..self.len], Some(1));
 
         self.pos += 1;
 
@@ -108,8 +104,8 @@ impl LineEditor {
             }
             b'e' => {
                 // Ctrl-E, go to end of line
+                display.move_in_line(CursorDir::Forward((self.len - self.pos) as u32));
                 self.pos = self.len;
-                display.move_in_line(CursorDir::Position((self.len + 1) as u32, self.row + 1));
                 None
             }
             _ => Some(key)
@@ -144,7 +140,7 @@ impl LineEditor {
 
         // Add a newline to the screen.
         let lf = [b'\n'];
-        display.insert_line(&lf, self.row, self.len as u32, 0);
+        display.insert_at_cursor(&lf, None);
         self.len += 1;
 
         // Let the caller know that processing is done for this line.
@@ -163,8 +159,8 @@ impl LineEditor {
 
             // Update the display.
             // The slice includes the space that was added at the formerly-last position.
-            display.insert_line(&self.buffer[self.pos..self.len], self.row, self.pos as u32,
-                                self.pos as u32);
+            display.move_in_line(CursorDir::Back(1));
+            display.insert_at_cursor(&self.buffer[self.pos..self.len], Some(0));
             self.len -= 1;
         }
 

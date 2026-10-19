@@ -130,15 +130,9 @@ impl Display {
         Display { obj: self.obj.clone() }
     }
 
-    pub fn insert_at_cursor(&mut self, chrs: &[u8]) {
+    pub fn insert_at_cursor(&mut self, chrs: &[u8], cursor_shift: Option<u32>) {
         let mut screen = self.obj.screen.lock().unwrap();
-        screen.insert_at_cursor(chrs);
-        self.obj.cond.notify_one();
-    }
-
-    pub fn insert_line(&mut self, chrs: &[u8], row: u32, col: u32, cursor_col: u32) {
-        let mut screen = self.obj.screen.lock().unwrap();
-        screen.insert_line(chrs, row, col, cursor_col);
+        screen.insert_at_cursor(chrs, cursor_shift);
         self.obj.cond.notify_one();
     }
 
@@ -151,12 +145,6 @@ impl Display {
     pub fn screen_size(&self) -> (u32, u32) {
         let screen = self.obj.screen.lock().unwrap();
         (screen.columns, screen.rows)
-    }
-
-    /// Get the cursor column and row.
-    pub fn get_cursor_pos(&self) -> (u32, u32) {
-        let screen = self.obj.screen.lock().unwrap();
-        (screen.cursor.col, screen.cursor.row)
     }
 
     pub fn framebuffer_size(&self) -> (u32, u32) {

@@ -61,7 +61,7 @@ impl IoMsgImpl for SerialServer {
 
         // Handle the bytes available in the internal buffer.
         let mut write_len = 0;
-        self.display.insert_at_cursor(data);
+        self.display.insert_at_cursor(data, None);
         write_len += data.len();
 
         // Handle additional bytes in the message.
@@ -69,7 +69,7 @@ impl IoMsgImpl for SerialServer {
         while write_len < msg.nbytes as usize {
             let mut data: [u8; 1024] = [0; 1024];
             let nbytes = trans.read(&mut data, offset)?;
-            self.display.insert_at_cursor(&data[0..nbytes]);
+            self.display.insert_at_cursor(&data[0..nbytes], None);
             write_len += nbytes;
             offset += nbytes;
         }
