@@ -17,6 +17,7 @@ use std::ptr::*;
 pub const CONNECT: u16 = 0x101;
 pub const POLL: u16 = 0x102;
 pub const REPORT_ATTACH: u16 = 0x103;
+pub const SET_IDLE: u16 = 0x10d;
 pub const REPORT_DESC: u16 = 0x114;
 
 #[repr(C, packed)]
@@ -63,6 +64,17 @@ pub struct AttachCmd {
     pub report_id: u8,
     pub _pad1: u8,
     pub _pad2: [u64; 2]
+}
+
+#[repr(C, packed)]
+pub struct IdleCmd {
+    pub devno: u32,
+    pub param: u32,
+    pub report_id: u8,
+    pub _pad1: u8,
+    pub idle_rate: u16,
+    pub _pad2: u32,
+    pub _pad3: [u64; 2]
 }
 
 const _IO_MSG: u16 = 0x113;

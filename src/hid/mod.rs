@@ -216,6 +216,23 @@ fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Keyboard>) {
         return;
     }
 
+    // Set the device idle rate to 50Hz.
+    let cmd = cmd::IdleCmd {
+        devno: device_number,
+        param: 0,
+        report_id: report.input_id,
+        _pad1: 0,
+        idle_rate: 50,
+        _pad2: 0,
+        _pad3: [ 0, 0 ]
+    };
+
+    if let Err(err) = cmd::send(fd, cmd::SET_IDLE, &cmd, NO_REPLY) {
+        println!("Failed to attach device: {err}");
+        return;
+    }
+
+
     *device = Some(Keyboard::new(device_number, report.input_report_len));
 }
 
