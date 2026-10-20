@@ -71,8 +71,8 @@ impl Keyboard {
             return key;
         }
 
-        // If the key has not been repeated yet, declare a repeat after 100ms
-        // Otherwise, a repeat occurs after 30ms.
+        // If the key has not been repeated yet, declare a repeat after 200ms
+        // Otherwise, a repeat occurs after 60ms.
         let repeat_time = if self.repeat {
             KEY_NEXT_REPEAT
         } else {
