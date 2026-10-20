@@ -17,6 +17,7 @@ system (GUI, network) are not available.
     * [Display](#display)
     * [HID](#hid)
     * [Resource Manager](#resource-manager)
+* [Known Issues](#known-issues)
 
 ## Notice on Software Maturity and Quality
 
@@ -263,3 +264,7 @@ hold the data to write).
 The generic handler for each I/O message invokes a type-specific handler, as
 defined by the `IoMsg` trait. This trait is implemented for the `Serial`
 structure, which is how the device driver handles its I/O messages.
+
+## Known Issues
+
+See the TODO file.
