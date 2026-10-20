@@ -84,6 +84,11 @@ $ cargo build --release --target aarch64-unknown-qnx
 $ devc-con-framebuffer [--double-buffer] [--screen-size COLSxROWS] [--no-daemon]
 ```
 
+Since the console only supports 16 colours for now, it is recommended to set the
+`TERM` environment variable to a terminal type that does not expect more
+colours. Both `qansi` and `xterm` (but not `xterm-256colors`) should produce
+good results.
+
 Typically, the console is added to the image file system (IFS) of a QNX system,
 and started early on in the boot script of the image
 
