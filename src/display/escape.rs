@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::display::DEFAULT_ATTR;
+use crate::display::{ScreenCharAttr, DEFAULT_ATTR};
 
 /// Escape sequence parser.
 #[derive(Debug)]
@@ -84,7 +84,7 @@ pub enum EscapeResult {
     /// Reverse index.
     RI,
     /// Select Graphic Rendition.
-    SGR(u8),
+    SGR(ScreenCharAttr),
     /// Line position absolute.
     VPA(u32)
 }
@@ -126,7 +126,7 @@ impl Escape {
     /// incomplete state given more bytes.
     /// Return true if parsing is complete (either successfully or not), or false if reached the
     /// end of the bytes before an escape sequence terminated.
-    pub fn parse(&mut self, data: &[u8], attr: u8) -> bool {
+    pub fn parse(&mut self, data: &[u8], attr: ScreenCharAttr) -> bool {
         let mut param: u32 = 0;
         let mut param_done: bool = false;
         let mut data_iter = data.into_iter();
@@ -296,7 +296,7 @@ impl Escape {
 
     /// Terminate a command sequence introducer.
     /// The final character determines the resulting command.
-    fn csi(&mut self, final_char: u8, attr: u8) {
+    fn csi(&mut self, final_char: u8, attr: ScreenCharAttr) {
         // Process sequence based on the final character.
         self.result = match final_char {
             b'm' => self.sgr_to_attr(attr),
@@ -339,12 +339,13 @@ impl Escape {
 
     /// Convert a CSI graphics command to character attributes.
     /// Currently only handles foreground and background colours.
-    fn sgr_to_attr(&self, mut attr: u8) -> EscapeResult {
+    fn sgr_to_attr(&self, mut attr: ScreenCharAttr) -> EscapeResult {
         if self.params.len() == 0 {
             // No parameters, reset.
             return EscapeResult::SGR(DEFAULT_ATTR);
         }
 
+        let mut ext_colour = 0;
         for i in 0..self.params.len() {
             let param = self.params[i];
             if param == 0 {
@@ -352,22 +353,46 @@ impl Escape {
                 attr = DEFAULT_ATTR;
             } else if param == 1 {
                 // Bold - use the bright version of the foreground colour.
-                attr |= 0x08;
+                attr.fg |= 0x08;
             } else if param == 7 || param == 27 {
                 // Reverse video.
-                attr = (attr >> 4) | (attr & 0xf) << 4;
+                let bg = attr.bg;
+                attr.bg = attr.fg;
+                attr.fg = bg;
+            } else if param == 38 && ext_colour == 0 {
+                // Begin a 256-colour foreground spec.
+                ext_colour = 1;
+            } else if param == 48 && ext_colour == 0 {
+                // Begin a 256-colour background spec.
+                ext_colour = 3;
+            } else if param == 5 && ext_colour == 1 {
+                // Second part of a 256-colour foreground spec.
+                ext_colour = 2;
+            } else if param == 5 && ext_colour == 3 {
+                // Second part of a 256-colour background spec.
+                ext_colour = 4;
+            } else if ext_colour == 2 {
+                // Select 256-colour foreground.
+                attr.fg = param as u8;
+                ext_colour = 0;
+            } else if ext_colour == 4 {
+                // Select 256-colour background.
+                attr.bg = param as u8;
+                ext_colour = 0;
             } else if param >= 30 && param <= 37 {
                 // Dark foreground colour.
-                attr = (attr & 0xf0) | (param as u8 - 30);
+                attr.fg = param as u8 - 30;
             } else if param >= 40 && param <= 47 {
                 // Dark background colour.
-                attr = (attr & 0x0f) | ((param as u8 - 40) << 4);
+                attr.bg = param as u8 - 40;
             } else if param >= 90 && param <= 97 {
                 // Light foreground colour.
-                attr = (attr & 0xf0) | (param as u8 - 82);
+                attr.fg = param as u8 - 82;
             } else if param >= 100 && param <= 107 {
                 // Light background colour.
-                attr = (attr & 0x0f) | ((param as u8 - 92) << 4);
+                attr.bg = param as u8 - 92;
+            } else {
+                return EscapeResult::None;
             }
         }
 

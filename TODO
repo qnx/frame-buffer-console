@@ -1,5 +1,4 @@
 * Emit SIGTTOU/SIGTTIN as needed
-* Support for 256 colours
 * Handle more special keys (e.g., page up/down)
 * Horizontal scrolling in canonical mode
 * Respond to commands that should generate output (e.g., DA2)

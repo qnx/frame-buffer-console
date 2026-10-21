@@ -33,7 +33,7 @@ pub struct Screen {
     /// Region of updated contents.
     dirty: Option<Rect>,
     /// Current attributes.
-    attr: u8,
+    attr: ScreenCharAttr,
     /// Escape sequence parser.
     pub escape: Escape,
     /// Whether DEC Special Grpahics character set is in effect.
