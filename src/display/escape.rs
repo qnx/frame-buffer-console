@@ -348,37 +348,49 @@ impl Escape {
         let mut ext_colour = 0;
         for i in 0..self.params.len() {
             let param = self.params[i];
+            if ext_colour > 0 {
+                // Continue a multi-parameter 256-colour sequence.
+                if param == 5 && ext_colour == 1 {
+                    // Second part of a 256-colour foreground spec.
+                    ext_colour = 2;
+                } else if param == 5 && ext_colour == 3 {
+                    // Second part of a 256-colour background spec.
+                    ext_colour = 4;
+                } else if ext_colour == 2 {
+                    // Select 256-colour foreground.
+                    attr.fg = param as u8;
+                    ext_colour = 0;
+                } else if ext_colour == 4 {
+                    // Select 256-colour background.
+                    attr.bg = param as u8;
+                    ext_colour = 0;
+                } else {
+                    return EscapeResult::None;
+                }
+
+                continue;
+            }
+
             if param == 0 {
                 // Reset.
                 attr = DEFAULT_ATTR;
             } else if param == 1 {
                 // Bold - use the bright version of the foreground colour.
                 attr.fg |= 0x08;
+            } else if param >= 11 && param <= 19 {
+                // Select alternate font.
+                attr.extra = param as u8 - 10;
             } else if param == 7 || param == 27 {
                 // Reverse video.
                 let bg = attr.bg;
                 attr.bg = attr.fg;
                 attr.fg = bg;
-            } else if param == 38 && ext_colour == 0 {
+            } else if param == 38 {
                 // Begin a 256-colour foreground spec.
                 ext_colour = 1;
-            } else if param == 48 && ext_colour == 0 {
+            } else if param == 48 {
                 // Begin a 256-colour background spec.
                 ext_colour = 3;
-            } else if param == 5 && ext_colour == 1 {
-                // Second part of a 256-colour foreground spec.
-                ext_colour = 2;
-            } else if param == 5 && ext_colour == 3 {
-                // Second part of a 256-colour background spec.
-                ext_colour = 4;
-            } else if ext_colour == 2 {
-                // Select 256-colour foreground.
-                attr.fg = param as u8;
-                ext_colour = 0;
-            } else if ext_colour == 4 {
-                // Select 256-colour background.
-                attr.bg = param as u8;
-                ext_colour = 0;
             } else if param >= 30 && param <= 37 {
                 // Dark foreground colour.
                 attr.fg = param as u8 - 30;

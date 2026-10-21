@@ -42,7 +42,9 @@ struct DisplayObj {
     /// Display update signalling object.
     cond: Condvar,
     /// Typeface used for drawing text.
-    font: &'static Font
+    font: &'static Font,
+    /// Typeface used for drawing blocks.
+    block_font: &'static Font
 }
 
 /// A character on the screen.
@@ -339,10 +341,10 @@ impl Display {
         let framebuffer = FrameBuffer::new(double_buffer)?;
 
         // Choose a font based on the frame buffer's geometry.
-        let font = if (framebuffer.height * 2) < framebuffer.width {
-            &font::FONT_9X8
+        let (font, block_font) = if (framebuffer.height * 2) < framebuffer.width {
+            (&font::FONT_9X8, &font::FONT_9X8)
         } else {
-            &font::FONT_9X16
+            (&font::FONT_9X16, &font::BLOCK_FONT_9X16)
         };
 
         // Calculate the number of columns and rows.
@@ -366,7 +368,8 @@ impl Display {
                 height: framebuffer.height,
                 screen,
                 cond: Condvar::new(),
-                font
+                font,
+                block_font
             })
         };
 
@@ -438,8 +441,15 @@ fn draw_screen(display: &DisplayObj, screen: &Screen, framebuffer: &FrameBuffer,
 /// Draw the glyph of a given character into the frame buffer at the specified column and row.
 fn draw_glyph(display: &DisplayObj, screen: &Screen, framebuffer: &FrameBuffer, col: u32,
               row: u32) {
-    let font = display.font;
-    let chr = screen.char_at(col, row);
+    let mut chr = screen.char_at(col, row);
+    let font = if chr.attr.extra == 9 && chr.chr >= 210 {
+        // devc-con-framebuffer extension:
+        // Alternate font 9 uses special block characters between 210 and 256.
+        chr.chr -= 210;
+        display.block_font
+    } else {
+        display.font
+    };
 
     // Don't render past right side of the frame.
     let font_width = font.width as u64;
