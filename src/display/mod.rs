@@ -442,10 +442,10 @@ fn draw_screen(display: &DisplayObj, screen: &Screen, framebuffer: &FrameBuffer,
 fn draw_glyph(display: &DisplayObj, screen: &Screen, framebuffer: &FrameBuffer, col: u32,
               row: u32) {
     let mut chr = screen.char_at(col, row);
-    let font = if chr.attr.extra == 9 && chr.chr >= 210 {
+    let font = if chr.attr.extra == 9 && chr.chr >= 206 {
         // devc-con-framebuffer extension:
-        // Alternate font 9 uses special block characters between 210 and 256.
-        chr.chr -= 210;
+        // Alternate font 9 uses special block characters between 206 and 256.
+        chr.chr -= 206;
         display.block_font
     } else {
         display.font
