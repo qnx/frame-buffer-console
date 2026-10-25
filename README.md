@@ -75,7 +75,7 @@ $ cargo build --release --target x86_64-pc-qnx
 or a debug version for QNX 8.0/ARMv8:
 
 ```
-$ cargo build --release --target aarch64-unknown-qnx
+$ cargo build --target aarch64-unknown-qnx
 ```
 
 ## Usage
