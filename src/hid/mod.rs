@@ -1,0 +1,330 @@
+// Copyright (c) 2026 BlackBerry Limited.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+mod report;
+mod keyboard;
+mod cmd;
+mod input;
+pub mod key;
+
+use libc;
+use std::ffi::CStr;
+use std::thread::{self, JoinHandle};
+use std::mem::MaybeUninit;
+use keyboard::Keyboard;
+use report::Report;
+use input::InputReport;
+use crate::serial::SerialServer;
+use crate::qnxmsg::channel::Channel;
+
+const HID_VERSION: u16 = 0x100;
+const HIDD_VERSION: u16 = 0x100;
+
+const HIDDI_FLAGS_EVTPOLL: u32 = 0x1;
+const HIDDI_FLAGS_EXCL_ATTACH: u32 = 0x2;
+const HIDDI_FLAGS_ENUMERATE: u32 = 0x4;
+
+const HIDDI_EVT_INSERTION: u16 = 257;
+const HIDDI_EVT_REMOVAL: u16 = 258;
+const HIDDI_EVT_HID_REPORT: u16 = 260;
+
+const HID_REPORT_INPUT: u16 = 8;
+const _HID_REPORT_OUTPUT: u16 = 9;
+
+#[repr(C, packed)]
+#[derive(Copy, Clone, Debug)]
+struct HidDeviceIdent {
+    vendor_id: u32,
+    product_id: u32,
+    version: u32
+}
+
+#[repr(C, packed)]
+#[derive(Copy, Clone, Debug)]
+struct HidDeviceInstance {
+    _next: *const libc::c_void,
+    _prev: *const libc::c_void,
+    devno: u32,
+    device_ident: HidDeviceIdent,
+    _report_info: *const libc::c_void,
+    report_desc_len: u16,
+    reserved: [u8; 6]
+}
+
+#[repr(C, packed)]
+#[derive(Copy, Clone, Debug)]
+struct HidReport {
+    devno: u32,
+    report_type: u32,
+    flags: u32,
+    report_id: u8,
+    reserved: [u8; 3]
+}
+
+#[repr(C, packed)]
+union HidEventPerType {
+    insertion: HidDeviceInstance,
+    removal: HidDeviceInstance,
+    report: HidReport
+}
+
+const MAX_REPORT_LEN: usize = 180;
+
+#[repr(C, packed)]
+struct HidEvent {
+    event_type: u16,
+    length: u16,
+    pad1: u32,
+    event: HidEventPerType,
+    reserved: [u8; 2],
+    dlen: u16,
+    pad2: [u8; 12],
+    report: [u8; MAX_REPORT_LEN]
+}
+
+/// A connection to the io-hid server.
+pub struct Hid {
+    fd: i32,
+    thandle: Option<JoinHandle<()>>,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum DeviceType {
+    Keyboard,
+    Mouse,
+    Other
+}
+
+const NO_REPLY: Option<&mut i32> = None;
+
+/// Safe wrapper for libc::open()
+fn open(path: &CStr, mode: libc::c_int) -> Result<i32, i32> {
+    let fd = unsafe {
+        libc::open(path.as_ptr(), mode)
+    };
+
+    if fd == -1 {
+        return Err(unsafe { *libc::__get_errno_ptr() });
+    }
+
+    Ok(fd)
+}
+
+/// Thread used to poll io-hid for events.
+fn poll_thread(fd: i32, channel: Channel) {
+    // Construct a poll command.
+    // Once a device is attached, the poll command message can return a report, so the reply needs
+    // to include a Report structure.
+    let cmd = cmd::PollCmd {
+        devno: 0,
+        param: 0,
+        buffer: size_of::<HidEvent>() as u32,
+        _pad1: 0,
+        _pad2: [0, 0]
+    };
+
+    let mut device: Option<Keyboard> = None;
+
+    loop {
+        // Get an event.
+        let mut event = MaybeUninit::<HidEvent>::uninit();
+        if let Err(err) = cmd::send(fd, cmd::POLL, &cmd, Some(&mut event)) {
+            println!("Poll thread stopping: {err}");
+            break;
+        }
+
+        let event = unsafe { event.assume_init() };
+        match event.event_type {
+            HIDDI_EVT_INSERTION => device_inserted(&event, fd, &mut device),
+            HIDDI_EVT_HID_REPORT => report_received(&event, &mut device, &channel),
+            HIDDI_EVT_REMOVAL => device_removed(&event, &mut device),
+            event_type => println!("Received event {event_type}")
+        };
+    }
+}
+
+/// Handle a device insertion event.
+fn device_inserted(event: &HidEvent, fd: i32, device: &mut Option<Keyboard>) {
+    // Do nothing if we already have a keyboard device.
+    if device.is_some() {
+        return;
+    }
+
+    // Extract the insertion event.
+    let dev_inst = unsafe { event.event.insertion };
+    let report_len = dev_inst.report_desc_len as usize;
+    if report_len > MAX_REPORT_LEN {
+        println!("Cannot handle device with report length {report_len}");
+        return;
+    }
+
+    let device_number = dev_inst.devno;
+
+    // Send a report command.
+    let cmd = cmd::ReportCmd {
+        devno: device_number,
+        param: report_len as u32,
+        _pad: [0, 0, 0]
+    };
+
+    let mut event = MaybeUninit::<HidEvent>::uninit();
+    if let Err(err) = cmd::send(fd, cmd::REPORT_DESC, &cmd, Some(&mut event)) {
+        println!("Failed to get report: {err}");
+        return;
+    }
+
+    // Parse the report.
+    let event = unsafe { event.assume_init() };
+    let report = match Report::new(&event.report, event.dlen as usize, false) {
+        Ok(report) => report,
+        Err(_) => { println!("Failed to parse report"); return; }
+    };
+
+    let (vendid, prodid) = (dev_inst.device_ident.vendor_id,
+                            dev_inst.device_ident.product_id);
+    println!("Found device device={} vendor={:x} product={:x}", device_number,
+             vendid, prodid);
+
+    if report.device_type != DeviceType::Keyboard {
+        return;
+    }
+
+    // Send an attach command.
+    let cmd = cmd::AttachCmd {
+        devno: device_number,
+        param: 0,
+        flags: 0,
+        report_type: HID_REPORT_INPUT,
+        report_id: report.input_id,
+        _pad1: 0,
+        _pad2: [ 0, 0 ]
+    };
+
+    if let Err(err) = cmd::send(fd, cmd::REPORT_ATTACH, &cmd, NO_REPLY) {
+        println!("Failed to attach device: {err}");
+        return;
+    }
+
+    // Set the device idle rate to 50Hz.
+    let cmd = cmd::IdleCmd {
+        devno: device_number,
+        param: 0,
+        report_id: report.input_id,
+        _pad1: 0,
+        idle_rate: 50,
+        _pad2: 0,
+        _pad3: [ 0, 0 ]
+    };
+
+    if let Err(err) = cmd::send(fd, cmd::SET_IDLE, &cmd, NO_REPLY) {
+        println!("Failed to attach device: {err}");
+        return;
+    }
+
+
+    *device = Some(Keyboard::new(device_number, report.input_report_len));
+}
+
+/// Handle a device removal event.
+fn device_removed(event: &HidEvent, device: &mut Option<Keyboard>) {
+    let keyboard = match device {
+        Some(device) => device,
+        None => { return; }
+    };
+
+    // Extract the removal event.
+    let dev_inst = unsafe { event.event.removal };
+    let device_number = dev_inst.devno;
+
+    if device_number == keyboard.device_number {
+        // Primary device removed.
+        *device = None;
+    }
+}
+
+/// Handle a HID report event.
+fn report_received(event: &HidEvent, device: &mut Option<Keyboard>,
+                   channel: &Channel) {
+    let device = match device {
+        None => {
+            println!("Report without a device");
+            return;
+        }
+        Some(device) => device
+    };
+
+    // Only interested in input reports for the registered device.
+    let (devno, report_type) = unsafe {
+        (event.event.report.devno, event.event.report.report_type)
+    };
+
+    if devno != device.device_number {
+        return;
+    }
+
+    if report_type != HID_REPORT_INPUT as u32 {
+        return;
+    }
+
+    let input_report = match InputReport::new(&event, device) {
+        Ok(report) => report,
+        Err(()) => { return; }
+    };
+
+    let key = input_report.as_key();
+    if let Some(key) = device.key_pressed(key) {
+        // FIXME:
+        // This will crash if a pulse cannot be emitted (e.g., OOM).
+        // Consider alternatives.
+        channel.send_pulse(-1, 0, key.to_pulse_value()).unwrap();
+    }
+}
+
+impl Hid {
+    pub fn new(server: &SerialServer) -> Result<Hid, i32> {
+        // Open a connection to the server.
+        let fd = open(c"/dev/io-hid/io-hid", libc::O_RDWR)?;
+
+        // Send the connect message.
+        let cmd = cmd::ConnectCmd {
+            devno: 0,
+            param: 0,
+            flags: HIDDI_FLAGS_EVTPOLL | HIDDI_FLAGS_EXCL_ATTACH | HIDDI_FLAGS_ENUMERATE,
+            vhid: HID_VERSION,
+            vhidd: HIDD_VERSION,
+            _pad: [0, 0]
+        };
+
+        cmd::send(fd, cmd::CONNECT, &cmd, NO_REPLY)?;
+
+        // Start the event polling thread.
+        let channel = server.get_channel();
+        let thandle = thread::spawn(move || { poll_thread(fd, channel); });
+
+        Ok(Hid { fd, thandle: Some(thandle) })
+    }
+}
+
+impl Drop for Hid {
+    fn drop(&mut self) {
+        // Close the connection to the server.
+        // This should cause the polling thread to exit.
+        unsafe { libc::close(self.fd) };
+
+        // Wait for the polling thread to exit.
+        if let Some(thandle) = self.thandle.take() {
+            thandle.join().unwrap();
+        }
+    }
+}
